@@ -1,0 +1,107 @@
+{
+  "name": "FAROL — BLING Contar Produtos",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Contador BLING\n\n**Rate limit:** intervalo 3,5s entre páginas.\n\n1º teste: `page_end = 1` (só página 1).\n\nSe der 429, **espere 15 min** e tente de novo.",
+        "height": 200,
+        "width": 400
+      },
+      "id": "c001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-360, -40]
+    },
+    {
+      "parameters": {},
+      "id": "c002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-120, 40]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "bling_base_url", "value": "https://api.bling.com.br/Api/v3", "type": "string" },
+            { "id": "a2", "name": "bling_criterio", "value": "5", "type": "string" },
+            { "id": "a3", "name": "bling_tipo", "value": "T", "type": "string" },
+            { "id": "a4", "name": "page_start", "value": 1, "type": "number" },
+            { "id": "a5", "name": "page_end", "value": 1, "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [100, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json;\nconst start = Number(cfg.page_start ?? 1);\nconst end = Number(cfg.page_end ?? 100);\nconst pages = [];\nfor (let p = start; p <= end; p++) {\n  pages.push({\n    json: {\n      page: p,\n      tipo: cfg.bling_tipo ?? 'T',\n      criterio: cfg.bling_criterio ?? '5',\n      bling_base_url: cfg.bling_base_url,\n    },\n  });\n}\nreturn pages;"
+      },
+      "id": "c004",
+      "name": "Paginas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 40]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.bling_base_url }}/produtos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "pagina", "value": "={{ $json.page }}" },
+            { "name": "limite", "value": "100" },
+            { "name": "criterio", "value": "={{ $json.criterio }}" },
+            { "name": "tipo", "value": "={{ $json.tipo }}" }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 3500
+            }
+          },
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "c005",
+      "name": "BLING - Contar",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 40],
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputs = $('Paginas').all();\nconst outputs = $input.all();\nlet totalItens = 0;\nlet paginasComDados = 0;\nlet paginasVazias = 0;\nlet erros = 0;\nlet ultimaPaginaComDados = 0;\nconst errosDetalhe = [];\n\nfor (let i = 0; i < outputs.length; i++) {\n  const page = inputs[i]?.json?.page ?? i + 1;\n  const item = outputs[i].json;\n  if (item.error) {\n    erros += 1;\n    errosDetalhe.push({ pagina: page, erro: item.error.type ?? item.error.message ?? 'erro' });\n    continue;\n  }\n  const batch = item.data ?? [];\n  const n = Array.isArray(batch) ? batch.length : 0;\n  if (n === 0) {\n    paginasVazias += 1;\n    continue;\n  }\n  paginasComDados += 1;\n  ultimaPaginaComDados = page;\n  totalItens += n;\n}\n\nconst cfg = $('Config').first().json;\nconst catalogoCompleto = paginasVazias > 0 && ultimaPaginaComDados > 0;\n\nreturn [{\n  json: {\n    total_produtos_bling: totalItens,\n    paginas_com_dados: paginasComDados,\n    paginas_vazias: paginasVazias,\n    erros_api: erros,\n    ultima_pagina_com_dados: ultimaPaginaComDados,\n    tipo: cfg.bling_tipo,\n    criterio: cfg.bling_criterio,\n    faixa_paginas: `${cfg.page_start}-${cfg.page_end}`,\n    catalogo_provavelmente_completo: catalogoCompleto,\n    observacao: catalogoCompleto\n      ? 'Encontrou página vazia após dados — catálogo inteiro nesta faixa.'\n      : ultimaPaginaComDados === Number(cfg.page_end)\n        ? 'Última página ainda tinha dados — aumente page_end e rode de novo.'\n        : 'Verifique erros ou credencial.',\n    erros_detalhe: errosDetalhe.slice(0, 10),\n  },\n}];"
+      },
+      "id": "c006",
+      "name": "Resumo total",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 40]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": { "main": [[{ "node": "Paginas", "type": "main", "index": 0 }]] },
+    "Paginas": { "main": [[{ "node": "BLING - Contar", "type": "main", "index": 0 }]] },
+    "BLING - Contar": { "main": [[{ "node": "Resumo total", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeout": 7200
+  },
+  "pinData": {}
+}

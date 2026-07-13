@@ -1,0 +1,826 @@
+{
+  "name": "FAROL — BLING Sync Vendas",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## FAROL — Sync Vendas (v12)\n\n- `dias_atras = 14` (histórico NF)\n- `modo_teste=0`\n- Intervalo BLING **4s**\n- Max **500** detalhes / **20** páginas lista\n\nCabe no timeout ~1h do n8n.",
+        "height": 220,
+        "width": 440
+      },
+      "id": "v001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "v002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "30 1 * * *"
+            }
+          ]
+        }
+      },
+      "id": "v002b",
+      "name": "Agendamento 1h30",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "company_id",
+              "value": "04c9b2c3-1c6e-439b-949a-486e4917b13c",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "supabase_url",
+              "value": "https://ilrebasidmyltziuibyc.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "bling_base_url",
+              "value": "https://api.bling.com.br/Api/v3",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "dias_atras",
+              "value": 14,
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "supabase_limit",
+              "value": 1000,
+              "type": "number"
+            },
+            {
+              "id": "a6",
+              "name": "vendas_max_paginas",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "a7",
+              "name": "nfe_series",
+              "value": "1,4",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "nfe_tipo",
+              "value": 1,
+              "type": "number"
+            },
+            {
+              "id": "a9",
+              "name": "nfe_max_detalhe",
+              "value": 500,
+              "type": "number"
+            },
+            {
+              "id": "a10",
+              "name": "bling_interval_ms",
+              "value": 4000,
+              "type": "number"
+            },
+            {
+              "id": "a11",
+              "name": "modo_teste",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "a12",
+              "name": "nfe_limite",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "a13",
+              "name": "bling_interval_ms_teste",
+              "value": 3500,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "v003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst d = new Date();\nconst fim = d.toISOString().slice(0, 10);\nconst ini = new Date(d.getTime() - Number(cfg.dias_atras ?? 7) * 86400000).toISOString().slice(0, 10);\nconst modoTeste = Boolean(Number(cfg.modo_teste));\nconst nfeLimite = Number(cfg.nfe_limite ?? 50);\nreturn [{\n  json: {\n    ...cfg,\n    dataInicial: ini,\n    dataFinal: fim,\n    dataEmissaoInicial: `${ini} 00:00:00`,\n    dataEmissaoFinal: `${fim} 23:59:59`,\n    continuar: true,\n    modo_teste: modoTeste,\n    nfe_limite: modoTeste ? nfeLimite : 0,\n    vendas_max_paginas: modoTeste ? 1 : Number(cfg.vendas_max_paginas ?? 10),\n    nfe_max_detalhe: modoTeste ? nfeLimite : Number(cfg.nfe_max_detalhe ?? 300),\n    bling_interval_ms: modoTeste\n      ? Number(cfg.bling_interval_ms_teste ?? 3500)\n      : Number(cfg.bling_interval_ms ?? 4000),\n  },\n}];"
+      },
+      "id": "v003b",
+      "name": "Continuar sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const limit = Number($input.first().json.supabase_limit ?? 1000);\nconst pages = [];\nfor (let offset = 0; offset < 20000; offset += limit) {\n  pages.push({ json: { ...$input.first().json, offset, limit } });\n}\nreturn pages;"
+      },
+      "id": "v003c",
+      "name": "Paginas supabase",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.supabase_url }}/rest/v1/products?company_id=eq.{{ $json.company_id }}&external_id=not.is.null&select=id,external_id,sku&order=external_id&limit={{ $json.limit }}&offset={{ $json.offset }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "v004",
+      "name": "Supabase - Produtos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        700,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "name": "farol_supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const all = [];\nfor (const item of $input.all()) {\n  const body = item.json;\n  if (Array.isArray(body)) {\n    all.push(...body);\n  } else if (body?.id && body?.external_id) {\n    all.push(body);\n  }\n}\nconst unique = [...new Map(all.map((p) => [String(p.external_id), p])).values()];\nreturn [{ json: { products: unique, total_produtos: unique.length } }];"
+      },
+      "id": "v004b",
+      "name": "Consolidar produtos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst maxPag = Number(cfg.vendas_max_paginas ?? 15);\nconst pages = [];\n\nfunction buildQuery(parts) {\n  return parts\n    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)\n    .join('&');\n}\n\nfor (let p = 1; p <= maxPag; p++) {\n  const queryParts = [['pagina', p], ['limite', '100']];\n  if (!cfg.modo_teste) {\n    queryParts.push(['tipo', String(cfg.nfe_tipo ?? 1)]);\n    if (cfg.dataEmissaoInicial) queryParts.push(['dataEmissaoInicial', cfg.dataEmissaoInicial]);\n    if (cfg.dataEmissaoFinal) queryParts.push(['dataEmissaoFinal', cfg.dataEmissaoFinal]);\n  }\n  pages.push({\n    json: {\n      page: p,\n      bling_base_url: cfg.bling_base_url,\n      nfe_url: `${cfg.bling_base_url}/nfe?${buildQuery(queryParts)}`,\n      dataEmissaoInicial: cfg.dataEmissaoInicial,\n      dataEmissaoFinal: cfg.dataEmissaoFinal,\n    },\n  });\n}\nreturn pages;"
+      },
+      "id": "v005",
+      "name": "Paginas NFe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.nfe_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendQuery": false,
+        "queryParameters": {
+          "parameters": []
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": "={{ $('Continuar sync').first().json.bling_interval_ms }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "v006",
+      "name": "BLING - Listar NFe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1320,
+        0
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "name": "bling_vitor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst allowed = new Set(String(cfg.nfe_series ?? '1,4').split(',').map((s) => s.trim()).filter(Boolean));\nconst maxDetalhe = Number(cfg.nfe_max_detalhe ?? 400);\nconst capNotas = Number(cfg.nfe_limite ?? 0) > 0 ? Number(cfg.nfe_limite) : Infinity;\nlet notasVistas = 0;\nconst comItens = [];\nconst precisaDetalhe = [];\nlet ignoradasSerie = 0;\nlet semSerieFilaDetalhe = 0;\nlet capDetalheIgnoradas = 0;\nlet nfesListaTotal = 0;\nlet errosLista = 0;\nlet paginasComDados = 0;\nlet erroListaAmostra = null;\nlet ignoradasTipo = 0;\nlet ignoradasPeriodo = 0;\nconst tipoCfg = Number(cfg.nfe_tipo ?? 1);\nconst iniPeriodo = new Date(String(cfg.dataInicial ?? cfg.dataEmissaoInicial ?? '').slice(0, 10)).getTime();\nconst fimPeriodo = new Date(String(cfg.dataFinal ?? cfg.dataEmissaoFinal ?? '').slice(0, 10)).getTime();\n\nfunction captureListaErr(item) {\n  const e = item.json.error;\n  if (e) {\n    if (typeof e === 'string') return e;\n    return e.message ?? e.description ?? e.type ?? JSON.stringify(e);\n  }\n  return JSON.stringify(item.json).slice(0, 400);\n}\n\nfunction isSaida(n) {\n  const t = Number(n.tipo ?? n.tipoNF ?? n.tipoNota ?? 1);\n  return t === tipoCfg;\n}\n\nfunction inPeriodo(n) {\n  if (!cfg.modo_teste) return true;\n  if (Number.isNaN(iniPeriodo) || Number.isNaN(fimPeriodo)) return true;\n  const raw = n.dataEmissao ?? n.data ?? n.dataSaida;\n  if (!raw) return true;\n  const ms = new Date(String(raw).slice(0, 10)).getTime();\n  if (Number.isNaN(ms)) return true;\n  return ms >= iniPeriodo && ms <= fimPeriodo + 86400000;\n}\n\nfunction getSerie(n) {\n  return String(n.serie ?? n.numeroSerie ?? n.serieNota ?? '').trim();\n}\n\nfunction hasItens(n) {\n  const itens = n.itens ?? n.itensNF ?? n.itensNota ?? [];\n  return Array.isArray(itens) && itens.length > 0;\n}\n\nfor (const item of $input.all()) {\n  if (item.json.error) {\n    errosLista += 1;\n    if (!erroListaAmostra) erroListaAmostra = captureListaErr(item);\n    continue;\n  }\n  const batch = item.json.data ?? [];\n  if (!Array.isArray(batch)) continue;\n  if (batch.length > 0) paginasComDados += 1;\n  for (const n of batch) {\n    if (notasVistas >= capNotas) break;\n    if (!n?.id) continue;\n    notasVistas += 1;\n    nfesListaTotal += 1;\n\n    if (!isSaida(n)) {\n      ignoradasTipo += 1;\n      continue;\n    }\n    if (!inPeriodo(n)) {\n      ignoradasPeriodo += 1;\n      continue;\n    }\n\n    const serie = getSerie(n);\n\n    if (serie && allowed.size > 0 && !allowed.has(serie)) {\n      ignoradasSerie += 1;\n      continue;\n    }\n\n    if (serie && allowed.has(serie) && hasItens(n)) {\n      comItens.push({ json: { fromList: true, nfeData: n } });\n      continue;\n    }\n\n    if (precisaDetalhe.length < maxDetalhe) {\n      if (!serie) semSerieFilaDetalhe += 1;\n      precisaDetalhe.push({ json: { fromList: false, nfeId: String(n.id), serie: serie || null, bling_base_url: cfg.bling_base_url } });\n    } else {\n      capDetalheIgnoradas += 1;\n    }\n  }\n  if (notasVistas >= capNotas) break;\n}\n\nconst stats = {\n  modo_teste: Boolean(cfg.modo_teste),\n  nfe_limite: capNotas === Infinity ? 0 : capNotas,\n  nfes_lista_total: nfesListaTotal,\n  paginas_com_dados: paginasComDados,\n  erros_lista: errosLista,\n  erro_lista_amostra: erroListaAmostra,\n  ignoradas_tipo: ignoradasTipo,\n  ignoradas_periodo: ignoradasPeriodo,\n  com_itens: comItens.length,\n  precisa_detalhe: precisaDetalhe.length,\n  ignoradas_serie: ignoradasSerie,\n  sem_serie_fila_detalhe: semSerieFilaDetalhe,\n  cap_detalhe_ignoradas: capDetalheIgnoradas,\n  data_inicial: cfg.dataInicial ?? cfg.dataEmissaoInicial,\n  data_final: cfg.dataFinal ?? cfg.dataEmissaoFinal,\n};\n\nconst out = [...comItens, ...precisaDetalhe];\nif (out.length === 0) {\n  return [{ json: { fromList: true, nfeData: null, stats } }];\n}\n\nreturn out.map((row, idx) => ({\n  json: {\n    ...row.json,\n    stats: idx === 0 ? stats : undefined,\n  },\n}));\n"
+      },
+      "id": "v007",
+      "name": "IDs notas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1540,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().filter((item) => item.json.fromList === false && item.json.nfeId);\nif (rows.length === 0) {\n  return [{ json: { skip_detalhe: true } }];\n}\nreturn rows;"
+      },
+      "id": "v007b",
+      "name": "Fila detalhe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.skip_detalhe }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v007c",
+      "name": "Tem detalhe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1980,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.bling_base_url }}/nfe/{{ $json.nfeId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": "={{ $('Continuar sync').first().json.bling_interval_ms }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "v008",
+      "name": "BLING - Detalhe NFe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        -80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "oAuth2Api": {
+          "name": "bling_vitor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst COMPANY_ID = cfg.company_id;\nconst allowedSeries = new Set(String(cfg.nfe_series ?? '1,4').split(',').map((s) => s.trim()).filter(Boolean));\nconst products = $('Consolidar produtos').first().json.products ?? [];\nconst byExternal = new Map();\nconst bySku = new Map();\nfor (const p of products) {\n  if (p.external_id) byExternal.set(String(p.external_id), p.id);\n  if (p.sku) {\n    const skuKey = String(p.sku).trim().toUpperCase();\n    if (skuKey) bySku.set(skuKey, p.id);\n  }\n}\nconst movements = [];\nlet errosApi = 0;\nlet notasIgnoradasSerie = 0;\nlet notasProcessadas = 0;\nlet notasSemItens = 0;\nlet linhasNfe = 0;\nlet linhasSemRef = 0;\nlet linhasSemMatch = 0;\nlet linhasOk = 0;\nlet exemploLinha = null;\n\nconst stats = ($('IDs notas').first().json.stats ?? {});\n\nfunction toIsoDate(value) {\n  if (!value) return new Date().toISOString();\n  if (typeof value === 'string') {\n    const trimmed = value.trim();\n    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(trimmed)) return `${trimmed}T12:00:00.000Z`;\n    if (/^\\d{4}-\\d{2}-\\d{2}T/.test(trimmed)) return trimmed;\n    const br = trimmed.match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})/);\n    if (br) return `${br[3]}-${br[2]}-${br[1]}T12:00:00.000Z`;\n  }\n  const d = new Date(value);\n  return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();\n}\n\nfunction resolveNfe(raw) {\n  const nfe = raw?.data ?? raw;\n  if (nfe?.data?.id) return nfe.data;\n  return nfe;\n}\n\nfunction getItens(nfe) {\n  const lists = [nfe.itens, nfe.itensNF, nfe.itensNota, nfe.notaFiscal?.itens, nfe.items];\n  for (const c of lists) {\n    if (Array.isArray(c) && c.length) return c;\n  }\n  return [];\n}\n\nfunction getBlingRef(linha) {\n  const p = linha.produto;\n  if (p && typeof p === 'object' && p.id != null) return { type: 'id', value: String(p.id) };\n  if (typeof p === 'number' || (typeof p === 'string' && String(p).trim())) {\n    return { type: 'id', value: String(p).trim() };\n  }\n  for (const k of ['idProduto', 'produtoId']) {\n    if (linha[k] != null) return { type: 'id', value: String(linha[k]) };\n  }\n  if (linha.codigoProduto?.id != null) return { type: 'id', value: String(linha.codigoProduto.id) };\n  const sku = linha.codigo ?? linha.codigoProduto ?? linha.produto?.codigo ?? linha.sku;\n  if (sku) return { type: 'sku', value: String(sku).trim() };\n  return null;\n}\n\nfunction getQty(linha) {\n  return Math.abs(Number(\n    linha.quantidade ?? linha.qtd ?? linha.qtde ?? linha.quantidadeComercial ?? linha.qCom ?? 0\n  ));\n}\n\nfunction processNfe(rawNfe) {\n  const nfeData = resolveNfe(rawNfe);\n  if (!nfeData?.id) return;\n  const serie = String(nfeData.serie ?? nfeData.numeroSerie ?? nfeData.serieNota ?? '').trim();\n  if (allowedSeries.size > 0 && serie && !allowedSeries.has(serie)) {\n    notasIgnoradasSerie += 1;\n    return;\n  }\n  const itens = getItens(nfeData);\n  if (!itens.length) {\n    notasSemItens += 1;\n    return;\n  }\n  notasProcessadas += 1;\n  const nfeId = String(nfeData.id);\n  const createdAt = toIsoDate(nfeData.dataEmissao ?? nfeData.data ?? nfeData.dataSaida);\n  for (let idx = 0; idx < itens.length; idx++) {\n    const linha = itens[idx];\n    linhasNfe += 1;\n    if (!exemploLinha) exemploLinha = JSON.stringify(linha).slice(0, 320);\n    const ref = getBlingRef(linha);\n    if (!ref) {\n      linhasSemRef += 1;\n      continue;\n    }\n    let productId = ref.type === 'id' ? byExternal.get(ref.value) : null;\n    if (!productId) productId = bySku.get(ref.value.toUpperCase());\n    if (!productId) {\n      linhasSemMatch += 1;\n      continue;\n    }\n    const qty = getQty(linha);\n    if (qty <= 0) continue;\n    linhasOk += 1;\n    movements.push({\n      company_id: COMPANY_ID,\n      product_id: productId,\n      type: 'saida',\n      quantity: Math.round(qty * 1000) / 1000,\n      reference_id: `${nfeId}-${idx}`,\n      reference_type: 'bling_nfe',\n      created_at: createdAt,\n    });\n  }\n}\n\nfor (const item of $('IDs notas').all()) {\n  if (item.json.fromList === true && item.json.nfeData) {\n    processNfe(item.json.nfeData);\n  }\n}\n\nlet detalhes = [];\ntry {\n  detalhes = $('BLING - Detalhe NFe').all();\n} catch (e) {\n  detalhes = [];\n}\n\nfor (const item of detalhes) {\n  if (item.json.error) {\n    errosApi += 1;\n    continue;\n  }\n  processNfe(item.json);\n}\n\nconst meta = {\n  movimentos: movements.length,\n  notas_processadas: notasProcessadas,\n  notas_sem_itens: notasSemItens,\n  linhas_nfe: linhasNfe,\n  linhas_ok: linhasOk,\n  linhas_sem_ref: linhasSemRef,\n  linhas_sem_match: linhasSemMatch,\n  exemplo_linha_nfe: exemploLinha,\n  notas_lista_com_itens: stats.com_itens ?? 0,\n  notas_detalhe_bling: stats.precisa_detalhe ?? 0,\n  notas_ignoradas_serie: (stats.ignoradas_serie ?? 0) + notasIgnoradasSerie,\n  notas_sem_serie_lista: stats.sem_serie_fila_detalhe ?? 0,\n  nfes_lista_total: stats.nfes_lista_total ?? 0,\n  paginas_com_dados: stats.paginas_com_dados ?? 0,\n  erros_lista: stats.erros_lista ?? 0,\n  erro_lista_amostra: stats.erro_lista_amostra ?? null,\n  cap_detalhe_ignoradas: stats.cap_detalhe_ignoradas ?? 0,\n  data_inicial: stats.data_inicial ?? cfg.dataInicial ?? null,\n  data_final: stats.data_final ?? cfg.dataFinal ?? null,\n  modo_teste: stats.modo_teste ?? false,\n  nfe_limite: stats.nfe_limite ?? 0,\n  erros_api: errosApi,\n  supabase_url: cfg.supabase_url,\n  skip_post: movements.length === 0,\n};\n\nconst chunks = [];\nfor (let i = 0; i < movements.length; i += 50) {\n  chunks.push({ json: { body: movements.slice(i, i + 50), ...meta } });\n}\nif (chunks.length === 0) {\n  chunks.push({ json: { body: [], ...meta } });\n}\nreturn chunks;"
+      },
+      "id": "v009",
+      "name": "Montar movimentos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.skip_post }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "v009b",
+      "name": "Tem movimentos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabase_url }}/rest/v1/inventory_movements?on_conflict=company_id,product_id,reference_type,reference_id",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "v010",
+      "name": "Supabase - Movimentos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        -80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "name": "farol_supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const montar = $('Montar movimentos').first().json;\nlet posts = [];\nif (!montar.skip_post) {\n  try {\n    posts = $('Supabase - Movimentos').all();\n  } catch (e) {\n    posts = [];\n  }\n}\nlet postsOk = 0;\nlet postsFail = 0;\nconst erros = [];\n\nfunction formatErr(body) {\n  if (!body) return 'sem body';\n  if (typeof body === 'string') return body;\n  if (body.message) return body.message;\n  if (body.error) return body.error;\n  if (body.code && body.details) return `${body.code}: ${body.details}`;\n  return JSON.stringify(body);\n}\n\nif (!montar.skip_post) {\n  for (const item of posts) {\n    const j = item.json;\n    const status = Number(j.statusCode ?? j.status ?? 0);\n    if (status >= 200 && status < 300) {\n      postsOk += 1;\n      continue;\n    }\n    postsFail += 1;\n    erros.push(`${status}: ${formatErr(j.body ?? j).slice(0, 400)}`);\n  }\n}\n\nreturn [{\n  json: {\n    produtos_supabase: $('Consolidar produtos').first().json.total_produtos,\n    movimentos: montar.movimentos ?? 0,\n    notas_processadas: montar.notas_processadas ?? 0,\n    notas_sem_itens: montar.notas_sem_itens ?? 0,\n    linhas_nfe: montar.linhas_nfe ?? 0,\n    linhas_ok: montar.linhas_ok ?? 0,\n    linhas_sem_ref: montar.linhas_sem_ref ?? 0,\n    linhas_sem_match: montar.linhas_sem_match ?? 0,\n    exemplo_linha_nfe: montar.exemplo_linha_nfe ?? null,\n    notas_lista_com_itens: montar.notas_lista_com_itens ?? 0,\n    notas_detalhe_bling: montar.notas_detalhe_bling ?? 0,\n    notas_ignoradas_serie: montar.notas_ignoradas_serie ?? 0,\n    notas_sem_serie_fila_detalhe: montar.notas_sem_serie_lista ?? 0,\n    nfes_lista_total: montar.nfes_lista_total ?? 0,\n    paginas_com_dados: montar.paginas_com_dados ?? 0,\n    erros_lista: montar.erros_lista ?? 0,\n    cap_detalhe_ignoradas: montar.cap_detalhe_ignoradas ?? 0,\n    data_inicial: montar.data_inicial ?? null,\n    data_final: montar.data_final ?? null,\n    modo_teste: montar.modo_teste ?? false,\n    nfe_limite: montar.nfe_limite ?? 0,\n    erro_lista_amostra: montar.erro_lista_amostra ?? null,\n    erros_api: montar.erros_api ?? 0,\n    posts_ok: postsOk,\n    posts_fail: postsFail,\n    erro_supabase_amostra: montar.skip_post ? 'nenhum movimento para gravar' : (erros.slice(0, 3).join(' | ') || null),\n  },\n}];"
+      },
+      "id": "v010b",
+      "name": "Consolidar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "produtos_supabase",
+              "value": "={{ $json.produtos_supabase }}",
+              "type": "number"
+            },
+            {
+              "id": "r2",
+              "name": "movimentos",
+              "value": "={{ $json.movimentos }}",
+              "type": "number"
+            },
+            {
+              "id": "r3",
+              "name": "notas_processadas",
+              "value": "={{ $json.notas_processadas }}",
+              "type": "number"
+            },
+            {
+              "id": "r4",
+              "name": "posts_ok",
+              "value": "={{ $json.posts_ok }}",
+              "type": "number"
+            },
+            {
+              "id": "r5",
+              "name": "posts_fail",
+              "value": "={{ $json.posts_fail }}",
+              "type": "number"
+            },
+            {
+              "id": "r6",
+              "name": "erro_supabase_amostra",
+              "value": "={{ $json.erro_supabase_amostra }}",
+              "type": "string"
+            },
+            {
+              "id": "r7",
+              "name": "nfes_lista_total",
+              "value": "={{ $json.nfes_lista_total }}",
+              "type": "number"
+            },
+            {
+              "id": "r8",
+              "name": "notas_lista_com_itens",
+              "value": "={{ $json.notas_lista_com_itens }}",
+              "type": "number"
+            },
+            {
+              "id": "r9",
+              "name": "notas_detalhe_bling",
+              "value": "={{ $json.notas_detalhe_bling }}",
+              "type": "number"
+            },
+            {
+              "id": "r10",
+              "name": "notas_ignoradas_serie",
+              "value": "={{ $json.notas_ignoradas_serie }}",
+              "type": "number"
+            },
+            {
+              "id": "r11",
+              "name": "notas_sem_serie_fila_detalhe",
+              "value": "={{ $json.notas_sem_serie_fila_detalhe }}",
+              "type": "number"
+            },
+            {
+              "id": "r12",
+              "name": "paginas_com_dados",
+              "value": "={{ $json.paginas_com_dados }}",
+              "type": "number"
+            },
+            {
+              "id": "r13",
+              "name": "erros_lista",
+              "value": "={{ $json.erros_lista }}",
+              "type": "number"
+            },
+            {
+              "id": "r14",
+              "name": "data_inicial",
+              "value": "={{ $json.data_inicial }}",
+              "type": "string"
+            },
+            {
+              "id": "r15",
+              "name": "data_final",
+              "value": "={{ $json.data_final }}",
+              "type": "string"
+            },
+            {
+              "id": "r16",
+              "name": "modo_teste",
+              "value": "={{ $json.modo_teste }}",
+              "type": "boolean"
+            },
+            {
+              "id": "r17",
+              "name": "nfe_limite",
+              "value": "={{ $json.nfe_limite }}",
+              "type": "number"
+            },
+            {
+              "id": "r18",
+              "name": "erro_lista_amostra",
+              "value": "={{ $json.erro_lista_amostra }}",
+              "type": "string"
+            },
+            {
+              "id": "r19",
+              "name": "notas_sem_itens",
+              "value": "={{ $json.notas_sem_itens }}",
+              "type": "number"
+            },
+            {
+              "id": "r20",
+              "name": "linhas_nfe",
+              "value": "={{ $json.linhas_nfe }}",
+              "type": "number"
+            },
+            {
+              "id": "r21",
+              "name": "linhas_ok",
+              "value": "={{ $json.linhas_ok }}",
+              "type": "number"
+            },
+            {
+              "id": "r22",
+              "name": "linhas_sem_match",
+              "value": "={{ $json.linhas_sem_match }}",
+              "type": "number"
+            },
+            {
+              "id": "r23",
+              "name": "exemplo_linha_nfe",
+              "value": "={{ $json.exemplo_linha_nfe }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "v011",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3300,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendamento 1h30": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Continuar sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continuar sync": {
+      "main": [
+        [
+          {
+            "node": "Paginas supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginas supabase": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Produtos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Produtos": {
+      "main": [
+        [
+          {
+            "node": "Consolidar produtos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar produtos": {
+      "main": [
+        [
+          {
+            "node": "Paginas NFe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginas NFe": {
+      "main": [
+        [
+          {
+            "node": "BLING - Listar NFe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLING - Listar NFe": {
+      "main": [
+        [
+          {
+            "node": "IDs notas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IDs notas": {
+      "main": [
+        [
+          {
+            "node": "Fila detalhe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila detalhe": {
+      "main": [
+        [
+          {
+            "node": "Tem detalhe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem detalhe?": {
+      "main": [
+        [
+          {
+            "node": "BLING - Detalhe NFe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Montar movimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLING - Detalhe NFe": {
+      "main": [
+        [
+          {
+            "node": "Montar movimentos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar movimentos": {
+      "main": [
+        [
+          {
+            "node": "Tem movimentos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem movimentos?": {
+      "main": [
+        [
+          {
+            "node": "Supabase - Movimentos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consolidar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - Movimentos": {
+      "main": [
+        [
+          {
+            "node": "Consolidar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar resultado": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeout": 21600
+  },
+  "pinData": {}
+}

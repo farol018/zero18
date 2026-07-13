@@ -1,0 +1,84 @@
+{
+  "name": "FAROL — BLING Diagnóstico",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Diagnóstico BLING (sem cliente)\n\nTesta página 1 de cada **tipo** de produto.\n\nVeja o nó **Resumo**: qual tipo tem mais itens.\n\nCredencial: **bling_vitor** no nó HTTP.",
+        "height": 200,
+        "width": 380
+      },
+      "id": "d001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-400, -60]
+    },
+    {
+      "parameters": {},
+      "id": "d002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-120, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const tipos = ['T', 'V', 'P', 'PS'];\nreturn tipos.map((tipo) => ({ json: { tipo, page: 1 } }));"
+      },
+      "id": "d003",
+      "name": "Tipos teste",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [100, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.bling.com.br/Api/v3/produtos",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "pagina", "value": "1" },
+            { "name": "limite", "value": "100" },
+            { "name": "criterio", "value": "5" },
+            { "name": "tipo", "value": "={{ $json.tipo }}" }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 500
+            }
+          },
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "d004",
+      "name": "BLING - Teste produtos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [320, 0],
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputs = $('Tipos teste').all();\nconst outputs = $input.all();\nconst linhas = [];\nfor (let i = 0; i < outputs.length; i++) {\n  const tipo = inputs[i]?.json?.tipo ?? '?';\n  const item = outputs[i];\n  if (item.json.error) {\n    linhas.push({ tipo, itens_pagina_1: 0, erro: item.json.error.type ?? item.json.error.message ?? 'erro' });\n    continue;\n  }\n  const batch = item.json.data ?? [];\n  const count = Array.isArray(batch) ? batch.length : 0;\n  const exemplo = count > 0 ? (batch[0].nome ?? batch[0].codigo ?? String(batch[0].id)) : null;\n  linhas.push({ tipo, itens_pagina_1: count, exemplo, tem_mais_paginas: count === 100 });\n}\nreturn [{ json: { resumo: linhas, total_tipos_com_100: linhas.filter((l) => l.itens_pagina_1 === 100).length } }];"
+      },
+      "id": "d005",
+      "name": "Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [540, 0]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": { "main": [[{ "node": "Tipos teste", "type": "main", "index": 0 }]] },
+    "Tipos teste": { "main": [[{ "node": "BLING - Teste produtos", "type": "main", "index": 0 }]] },
+    "BLING - Teste produtos": { "main": [[{ "node": "Resumo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

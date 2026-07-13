@@ -1,0 +1,96 @@
+{
+  "name": "FAROL — BLING Diagnostico Vendas",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Diagnostico Vendas\n\nTesta pagina 1 de /pedidos/vendas.\n\nVeja o no **Resumo**: quantos pedidos, erro (scope?), datas usadas.\n\nCredencial OAuth **nova** no no BLING.",
+        "height": 190,
+        "width": 400
+      },
+      "id": "dv001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-360, -40]
+    },
+    {
+      "parameters": {},
+      "id": "dv002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-120, 40]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "bling_base_url", "value": "https://api.bling.com.br/Api/v3", "type": "string" },
+            { "id": "a2", "name": "dias_atras", "value": 30, "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dv003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [100, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json;\nconst d = new Date();\nconst fim = d.toISOString().slice(0, 10);\nconst ini = new Date(d.getTime() - Number(cfg.dias_atras ?? 30) * 86400000).toISOString().slice(0, 10);\nreturn [{ json: { ...cfg, dataInicial: ini, dataFinal: fim } }];"
+      },
+      "id": "dv004",
+      "name": "Datas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 40]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.bling_base_url }}/pedidos/vendas",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "pagina", "value": "1" },
+            { "name": "limite", "value": "100" },
+            { "name": "dataInicial", "value": "={{ $json.dataInicial }}" },
+            { "name": "dataFinal", "value": "={{ $json.dataFinal }}" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "dv005",
+      "name": "BLING - Pedidos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 40],
+      "alwaysOutputData": true,
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Datas').first().json;\nconst item = $input.first().json;\nlet resultado;\nif (item.error) {\n  resultado = { erro: item.error.type ?? item.error.message ?? 'erro', erro_desc: item.error.description ?? null };\n} else {\n  const batch = item.data ?? [];\n  const n = Array.isArray(batch) ? batch.length : 0;\n  const exemplo = n > 0 ? { id: batch[0].id, numero: batch[0].numero, data: batch[0].data } : null;\n  resultado = { pedidos_pagina_1: n, exemplo };\n}\nreturn [{ json: { ...resultado, dataInicial: cfg.dataInicial, dataFinal: cfg.dataFinal } }];"
+      },
+      "id": "dv006",
+      "name": "Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 40]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": { "main": [[{ "node": "Datas", "type": "main", "index": 0 }]] },
+    "Datas": { "main": [[{ "node": "BLING - Pedidos", "type": "main", "index": 0 }]] },
+    "BLING - Pedidos": { "main": [[{ "node": "Resumo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

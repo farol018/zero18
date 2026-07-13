@@ -1,0 +1,87 @@
+{
+  "name": "FAROL — BLING Diagnostico NFe",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Diagnostico NF-e\n\nTesta `GET /nfe` pagina 1.\n\nVeja **Resumo**: total, erro OAuth/scope, exemplo de nota.\n\nCredencial: **bling_vitor**",
+        "height": 180,
+        "width": 400
+      },
+      "id": "dn001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-360, -40]
+    },
+    {
+      "parameters": {},
+      "id": "dn002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-120, 40]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "a1", "name": "bling_base_url", "value": "https://api.bling.com.br/Api/v3", "type": "string" },
+            { "id": "a2", "name": "dias_atras", "value": 7, "type": "number" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "dn003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [100, 40]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json;\nconst d = new Date();\nconst fim = d.toISOString().slice(0, 10);\nconst ini = new Date(d.getTime() - Number(cfg.dias_atras ?? 7) * 86400000).toISOString().slice(0, 10);\nconst urls = [\n  { label: 'sem_filtro', url: `${cfg.bling_base_url}/nfe?pagina=1&limite=5` },\n  { label: 'com_datas', url: `${cfg.bling_base_url}/nfe?pagina=1&limite=5&dataEmissaoInicial=${encodeURIComponent(ini + ' 00:00:00')}&dataEmissaoFinal=${encodeURIComponent(fim + ' 23:59:59')}` },\n  { label: 'com_tipo_saida', url: `${cfg.bling_base_url}/nfe?pagina=1&limite=5&tipo=1&dataEmissaoInicial=${encodeURIComponent(ini + ' 00:00:00')}&dataEmissaoFinal=${encodeURIComponent(fim + ' 23:59:59')}` },\n];\nreturn urls.map((u) => ({ json: { ...cfg, ...u, dataInicial: ini, dataFinal: fim } }));"
+      },
+      "id": "dn004",
+      "name": "URLs teste",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 40]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "options": {
+          "response": { "response": { "neverError": true } }
+        }
+      },
+      "id": "dn005",
+      "name": "BLING - NFe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [540, 40],
+      "alwaysOutputData": true,
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+    },
+    {
+      "parameters": {
+        "jsCode": "const inputs = $('URLs teste').all();\nconst outputs = $input.all();\nconst linhas = [];\n\nfor (let i = 0; i < outputs.length; i++) {\n  const label = inputs[i]?.json?.label ?? `req_${i}`;\n  const item = outputs[i].json;\n  if (item.error) {\n    const e = item.error;\n    linhas.push({\n      teste: label,\n      ok: false,\n      erro: typeof e === 'string' ? e : (e.message ?? e.description ?? e.type ?? JSON.stringify(e)),\n    });\n    continue;\n  }\n  const batch = item.data ?? [];\n  const n = Array.isArray(batch) ? batch.length : 0;\n  const ex = n > 0 ? batch[0] : null;\n  linhas.push({\n    teste: label,\n    ok: true,\n    notas: n,\n    exemplo_id: ex?.id ?? null,\n    exemplo_serie: ex?.serie ?? ex?.numeroSerie ?? null,\n    exemplo_tipo: ex?.tipo ?? null,\n    exemplo_data: ex?.dataEmissao ?? ex?.data ?? null,\n    tem_itens: Array.isArray(ex?.itens) ? ex.itens.length : 0,\n  });\n}\n\nconst cfg = $('Config').first().json;\nreturn [{ json: { periodo: `${$('URLs teste').first().json.dataInicial} a ${$('URLs teste').first().json.dataFinal}`, resultados: linhas } }];"
+      },
+      "id": "dn006",
+      "name": "Resumo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [760, 40]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+    "Config": { "main": [[{ "node": "URLs teste", "type": "main", "index": 0 }]] },
+    "URLs teste": { "main": [[{ "node": "BLING - NFe", "type": "main", "index": 0 }]] },
+    "BLING - NFe": { "main": [[{ "node": "Resumo", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {}
+}

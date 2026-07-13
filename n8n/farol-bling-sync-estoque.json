@@ -1,0 +1,1001 @@
+{
+
+  "name": "FAROL — BLING Sync Estoque",
+
+  "nodes": [
+
+    {
+
+      "parameters": {
+
+        "content": "## FAROL — Sync Estoque (v9)\n\nUsa `GET /estoques/saldos/{deposito_id}` — saldo **já filtrado** por RajLog.\n\nID RajLog: **14888008180** | Intervalo: **15s** | Retry auto 2 min",
+
+        "height": 200,
+
+        "width": 420
+
+      },
+
+      "id": "e001",
+
+      "name": "Notas",
+
+      "type": "n8n-nodes-base.stickyNote",
+
+      "typeVersion": 1,
+
+      "position": [-400, -80]
+
+    },
+
+    {
+
+      "parameters": {},
+
+      "id": "e002",
+
+      "name": "Executar manualmente",
+
+      "type": "n8n-nodes-base.manualTrigger",
+
+      "typeVersion": 1,
+
+      "position": [-120, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "assignments": {
+
+          "assignments": [
+
+            { "id": "a1", "name": "company_id", "value": "04c9b2c3-1c6e-439b-949a-486e4917b13c", "type": "string" },
+
+            { "id": "a2", "name": "supabase_url", "value": "https://ilrebasidmyltziuibyc.supabase.co", "type": "string" },
+
+            { "id": "a3", "name": "bling_base_url", "value": "https://api.bling.com.br/Api/v3", "type": "string" },
+
+            { "id": "a4", "name": "supabase_limit", "value": 1000, "type": "number" },
+
+            { "id": "a5", "name": "deposito_nome", "value": "RajLog", "type": "string" },
+
+            { "id": "a6", "name": "deposito_id", "value": "14888008180", "type": "string" },
+
+            { "id": "a7", "name": "deposito_probe_external_id", "value": "16103416522", "type": "string" },
+
+            { "id": "a8", "name": "deposito_probe_saldo_esperado", "value": 187, "type": "number" },
+
+            { "id": "a9", "name": "bling_interval_ms", "value": 15000, "type": "number" },
+
+            { "id": "a10", "name": "probe_pausa_segundos", "value": 15, "type": "number" }
+
+          ]
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e003",
+
+      "name": "Config",
+
+      "type": "n8n-nodes-base.set",
+
+      "typeVersion": 3.4,
+
+      "position": [100, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $('Config').first().json;\nreturn [{ json: { ...cfg, continuar: true } }];"
+
+      },
+
+      "id": "e003b",
+
+      "name": "Continuar sync",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [280, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "conditions": {
+
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+
+          "conditions": [
+
+            {
+
+              "id": "c1",
+
+              "leftValue": "={{ $('Continuar sync').first().json.deposito_id }}",
+
+              "rightValue": "",
+
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+
+            }
+
+          ],
+
+          "combinator": "and"
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e003f",
+
+      "name": "deposito_id no Config?",
+
+      "type": "n8n-nodes-base.if",
+
+      "typeVersion": 2.2,
+
+      "position": [460, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nreturn [{\n  json: {\n    ...cfg,\n    deposito_id: String(cfg.deposito_id).trim(),\n    deposito_resolvido: cfg.deposito_nome || cfg.deposito_id,\n    deposito_opcoes: '[]',\n  },\n}];"
+
+      },
+
+      "id": "e003h",
+
+      "name": "Resolver manual",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [700, -120]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "amount": "={{ $('Continuar sync').first().json.probe_pausa_segundos ?? 15 }}",
+
+        "unit": "seconds"
+
+      },
+
+      "id": "e003g",
+
+      "name": "Pausa antes probe",
+
+      "type": "n8n-nodes-base.wait",
+
+      "typeVersion": 1.1,
+
+      "position": [700, 120],
+
+      "webhookId": "farol-estoque-pausa-probe"
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "GET",
+
+        "url": "={{ $('Continuar sync').first().json.bling_base_url }}/estoques/saldos",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "oAuth2Api",
+
+        "sendQuery": true,
+
+        "queryParameters": {
+
+          "parameters": [
+
+            { "name": "idsProdutos[]", "value": "={{ $('Continuar sync').first().json.deposito_probe_external_id || '16103416522' }}" }
+
+          ]
+
+        },
+
+        "options": {
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e003d",
+
+      "name": "BLING - Probe estoque",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [920, 120],
+
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst resp = $input.first().json;\n\nfunction norm(value) {\n  return String(value ?? '')\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')\n    .toLowerCase()\n    .replace(/[^a-z0-9]/g, '');\n}\n\nfunction depId(dep) {\n  return String(dep?.deposito?.id ?? dep?.idDeposito ?? dep?.id ?? '').trim();\n}\n\nlet depositoId = cfg.deposito_id ? String(cfg.deposito_id).trim() : '';\nconst want = norm(cfg.deposito_nome ?? 'rajlog');\nlet depositoResolvido = depositoId;\nlet depositoOpcoes = [];\n\nif (!depositoId) {\n  const row = Array.isArray(resp.data) ? resp.data[0] : null;\n  const deps = row?.depositos ?? [];\n\n  depositoOpcoes = deps.map((dep) => ({\n    id: depId(dep),\n    saldo: Number(dep.saldoFisico ?? dep.saldo ?? 0),\n    nome: dep.deposito?.nome ?? dep.deposito?.descricao ?? dep.nome ?? dep.descricao ?? '',\n  })).filter((d) => d.id);\n\n  for (const dep of deps) {\n    const label = norm(dep.deposito?.nome ?? dep.deposito?.descricao ?? dep.nome ?? dep.descricao ?? '');\n    if (!label) continue;\n    if (label.includes(want) || want.includes(label)) {\n      depositoId = depId(dep);\n      depositoResolvido = dep.deposito?.nome ?? dep.nome ?? dep.deposito?.descricao ?? depositoId;\n      break;\n    }\n  }\n\n  if (!depositoId) {\n    for (const dep of deps) {\n      const raw = String(dep.deposito?.nome ?? dep.nome ?? dep.deposito?.descricao ?? '').toLowerCase();\n      if (raw.includes('raj') && raw.includes('log')) {\n        depositoId = depId(dep);\n        depositoResolvido = raw;\n        break;\n      }\n    }\n  }\n\n  const esperado = Number(cfg.deposito_probe_saldo_esperado ?? 0);\n  if (!depositoId && esperado > 0) {\n    const matches = depositoOpcoes.filter((d) => d.saldo === esperado);\n    if (matches.length === 1) {\n      depositoId = matches[0].id;\n      depositoResolvido = matches[0].nome || `deposito saldo ${esperado}`;\n    }\n  }\n}\n\nconst payload = {\n  ...cfg,\n  deposito_id: depositoId,\n  deposito_resolvido: depositoResolvido || cfg.deposito_nome,\n  deposito_opcoes: JSON.stringify(depositoOpcoes),\n};\n\nif (!depositoId) {\n  const err = resp.error ?? null;\n  if (err && (err.type === 'TOO_MANY_REQUESTS' || String(err.message ?? '').includes('Limite'))) {\n    payload.deposito_erro = `RATE LIMIT BLING no probe. Aguarde 2 minutos, pare outros workflows BLING (vendas/estoque) e rode de novo. ${err.message ?? ''}`;\n    payload.rate_limited = true;\n  } else if (depositoOpcoes.length) {\n    payload.deposito_erro = `RajLog nao identificado. Preencha deposito_id no Config. Opcoes: ${JSON.stringify(depositoOpcoes)}`;\n  } else {\n    payload.deposito_erro = `Probe sem depositos (produto ${cfg.deposito_probe_external_id ?? '16103416522'}). Resposta: ${JSON.stringify(err ?? resp).slice(0, 400)}`;\n  }\n}\n\nreturn [{ json: payload }];"
+
+      },
+
+      "id": "e003e",
+
+      "name": "Resolver RajLog",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [1140, 120]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "conditions": {
+
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+
+          "conditions": [
+
+            {
+
+              "id": "c2",
+
+              "leftValue": "={{ $json.deposito_id }}",
+
+              "rightValue": "",
+
+              "operator": { "type": "string", "operation": "notEmpty", "singleValue": true }
+
+            }
+
+          ],
+
+          "combinator": "and"
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e003i",
+
+      "name": "RajLog resolvido?",
+
+      "type": "n8n-nodes-base.if",
+
+      "typeVersion": 2.2,
+
+      "position": [1360, 120]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "assignments": {
+
+          "assignments": [
+
+            { "id": "x1", "name": "produtos_supabase", "value": 0, "type": "number" },
+
+            { "id": "x2", "name": "estoque_sincronizado", "value": 0, "type": "number" },
+
+            { "id": "x3", "name": "erros_api", "value": 0, "type": "number" },
+
+            { "id": "x4", "name": "deposito_id", "value": "={{ $('Resolver RajLog').first().json.deposito_id }}", "type": "string" },
+
+            { "id": "x5", "name": "deposito", "value": "NAO_RESOLVIDO", "type": "string" },
+
+            { "id": "x6", "name": "sem_depositos", "value": 0, "type": "number" },
+
+            { "id": "x7", "name": "deposito_erro", "value": "={{ $('Resolver RajLog').first().json.deposito_erro }}", "type": "string" },
+
+            { "id": "x8", "name": "deposito_opcoes", "value": "={{ $('Resolver RajLog').first().json.deposito_opcoes }}", "type": "string" },
+
+            { "id": "x9", "name": "abortado", "value": true, "type": "boolean" }
+
+          ]
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e009b",
+
+      "name": "Resultado abortado",
+
+      "type": "n8n-nodes-base.set",
+
+      "typeVersion": 3.4,
+
+      "position": [1580, 240]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $input.first().json;\nconst limit = Number(cfg.supabase_limit ?? 1000);\nconst pages = [];\nfor (let offset = 0; offset < 20000; offset += limit) {\n  pages.push({ json: { ...cfg, offset, limit } });\n}\nreturn pages;"
+
+      },
+
+      "id": "e003c",
+
+      "name": "Paginas supabase",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [1580, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "GET",
+
+        "url": "={{ $json.supabase_url }}/rest/v1/products?company_id=eq.{{ $json.company_id }}&external_id=not.is.null&select=id,external_id&order=external_id&limit={{ $json.limit }}&offset={{ $json.offset }}",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "supabaseApi",
+
+        "options": {
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e004",
+
+      "name": "Supabase - Produtos",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [1800, 0],
+
+      "alwaysOutputData": true,
+
+      "credentials": { "supabaseApi": { "name": "farol_supabase" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const all = [];\nfor (const item of $input.all()) {\n  const body = item.json;\n  if (Array.isArray(body)) {\n    all.push(...body);\n  } else if (body?.id && body?.external_id) {\n    all.push(body);\n  }\n}\nconst unique = [...new Map(all.map((p) => [p.external_id, p])).values()];\nreturn [{ json: { products: unique, total_produtos: unique.length } }];"
+
+      },
+
+      "id": "e004b",
+
+      "name": "Consolidar produtos",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [2020, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const products = $input.first().json.products ?? [];\nconst cfg = $('Paginas supabase').first().json;\nconst batches = [];\nfor (let i = 0; i < products.length; i += 30) {\n  const chunk = products.slice(i, i + 30);\n  const query = chunk.map((p) => `idsProdutos[]=${encodeURIComponent(p.external_id)}`).join('&');\n  batches.push({\n    json: {\n      query,\n      map: Object.fromEntries(chunk.map((p) => [String(p.external_id), p.id])),\n      bling_base_url: cfg.bling_base_url,\n    },\n  });\n}\nif (batches.length === 0) {\n  batches.push({ json: { query: '', map: {}, bling_base_url: cfg.bling_base_url, vazio: true } });\n}\nreturn batches;"
+
+      },
+
+      "id": "e005",
+
+      "name": "Lotes estoque",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [2240, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "GET",
+
+        "url": "={{ $json.bling_base_url }}/estoques/saldos/{{ $('Paginas supabase').first().json.deposito_id }}?{{ $json.query }}",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "oAuth2Api",
+
+        "options": {
+
+          "batching": {
+
+            "batch": {
+
+              "batchSize": 1,
+
+              "batchInterval": 15000
+
+            }
+
+          },
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e006",
+
+      "name": "BLING - Estoque",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [2460, 0],
+
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $('Paginas supabase').first().json;\nconst COMPANY_ID = cfg.company_id;\nconst now = new Date().toISOString();\nconst depositoId = String(cfg.deposito_id ?? '').trim();\nconst lotes = $('Lotes estoque').all();\nconst responses = $input.all();\nconst stockPayload = [];\nconst retryMap = {};\nlet errosApi = 0;\nlet semDepositos = 0;\nlet rateLimited = 0;\n\nfunction depositoKey(dep) {\n  return String(dep.deposito?.id ?? dep.idDeposito ?? dep.id ?? dep.depositoId ?? '').trim();\n}\n\nfunction quantityFromRow(row) {\n  const direct = row.saldoFisico ?? row.saldo ?? row.quantidade ?? row.saldoVirtual ?? row.saldoFisicoTotal;\n  if (direct !== undefined && direct !== null) return Number(direct);\n  if (!Array.isArray(row.depositos) || row.depositos.length === 0) return null;\n  let quantity = 0;\n  let matched = false;\n  for (const dep of row.depositos) {\n    if (depositoId && depositoKey(dep) !== depositoId) continue;\n    matched = true;\n    quantity += Number(dep.saldoFisico ?? dep.saldo ?? dep.saldoFisicoTotal ?? 0);\n  }\n  return matched ? quantity : null;\n}\n\nfor (let i = 0; i < responses.length; i++) {\n  const map = lotes[i]?.json?.map ?? {};\n  const item = responses[i].json;\n  if (item.error) {\n    errosApi += 1;\n    if (item.error?.type === 'TOO_MANY_REQUESTS') {\n      rateLimited += 1;\n      Object.assign(retryMap, map);\n    }\n    continue;\n  }\n  const rows = item.data ?? [];\n  if (!Array.isArray(rows)) continue;\n  for (const row of rows) {\n    const externalId = String(row.produto?.id ?? row.idProduto ?? '');\n    const productId = map[externalId];\n    if (!productId) continue;\n    const quantity = quantityFromRow(row);\n    if (quantity === null) {\n      semDepositos += 1;\n      continue;\n    }\n    stockPayload.push({ company_id: COMPANY_ID, product_id: productId, quantity, updated_at: now });\n  }\n}\n\nconst depositoLabel = cfg.deposito_resolvido || depositoId;\nconst meta = {\n  synced: stockPayload.length,\n  erros_api: errosApi,\n  rate_limited: rateLimited,\n  sem_depositos: semDepositos,\n  supabase_url: cfg.supabase_url,\n  deposito: depositoLabel,\n  deposito_id: depositoId,\n  retry_count: Object.keys(retryMap).length,\n  skip_post: stockPayload.length === 0,\n};\n\nconst chunks = [];\nfor (let i = 0; i < stockPayload.length; i += 50) {\n  chunks.push({ json: { body: stockPayload.slice(i, i + 50), ...meta, retry_map: retryMap } });\n}\nif (chunks.length === 0) {\n  chunks.push({ json: { body: [], ...meta, retry_map: retryMap } });\n}\nreturn chunks;"
+
+      },
+
+      "id": "e007",
+
+      "name": "Montar estoque",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [2680, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "conditions": {
+
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+
+          "conditions": [
+
+            {
+
+              "id": "c3",
+
+              "leftValue": "={{ $json.skip_post }}",
+
+              "rightValue": true,
+
+              "operator": { "type": "boolean", "operation": "notEquals" }
+
+            }
+
+          ],
+
+          "combinator": "and"
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e007b",
+
+      "name": "Tem estoque?",
+
+      "type": "n8n-nodes-base.if",
+
+      "typeVersion": 2.2,
+
+      "position": [2900, 0]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "POST",
+
+        "url": "={{ $json.supabase_url }}/rest/v1/current_stock?on_conflict=company_id,product_id",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "supabaseApi",
+
+        "sendHeaders": true,
+
+        "headerParameters": {
+
+          "parameters": [
+
+            { "name": "Content-Type", "value": "application/json" },
+
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
+
+          ]
+
+        },
+
+        "sendBody": true,
+
+        "specifyBody": "json",
+
+        "jsonBody": "={{ $json.body }}",
+
+        "options": {
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e008",
+
+      "name": "Supabase - Estoque",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [3120, -80],
+
+      "credentials": { "supabaseApi": { "name": "farol_supabase" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "conditions": {
+
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 2 },
+
+          "conditions": [
+
+            {
+
+              "id": "c4",
+
+              "leftValue": "={{ $('Montar estoque').first().json.retry_count }}",
+
+              "rightValue": 0,
+
+              "operator": { "type": "number", "operation": "gt" }
+
+            }
+
+          ],
+
+          "combinator": "and"
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e007c",
+
+      "name": "Precisa retry?",
+
+      "type": "n8n-nodes-base.if",
+
+      "typeVersion": 2.2,
+
+      "position": [3340, -80]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "amount": 120,
+
+        "unit": "seconds"
+
+      },
+
+      "id": "e007d",
+
+      "name": "Pausa retry",
+
+      "type": "n8n-nodes-base.wait",
+
+      "typeVersion": 1.1,
+
+      "position": [3560, -160],
+
+      "webhookId": "farol-estoque-retry-pausa"
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const retryMap = $('Montar estoque').first().json.retry_map ?? {};\nconst cfg = $('Paginas supabase').first().json;\nconst entries = Object.entries(retryMap);\nconst batches = [];\nfor (let i = 0; i < entries.length; i += 20) {\n  const chunk = entries.slice(i, i + 20);\n  const query = chunk.map(([ext]) => `idsProdutos[]=${encodeURIComponent(ext)}`).join('&');\n  batches.push({ json: { query, map: Object.fromEntries(chunk), bling_base_url: cfg.bling_base_url } });\n}\nif (batches.length === 0) {\n  return [{ json: { query: '', map: {}, bling_base_url: cfg.bling_base_url, vazio: true } }];\n}\nreturn batches;"
+
+      },
+
+      "id": "e007e",
+
+      "name": "Lotes retry",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [3780, -160]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "GET",
+
+        "url": "={{ $json.bling_base_url }}/estoques/saldos/{{ $('Paginas supabase').first().json.deposito_id }}?{{ $json.query }}",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "oAuth2Api",
+
+        "options": {
+
+          "batching": {
+
+            "batch": {
+
+              "batchSize": 1,
+
+              "batchInterval": 15000
+
+            }
+
+          },
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e007f",
+
+      "name": "BLING - Retry estoque",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [4000, -160],
+
+      "credentials": { "oAuth2Api": { "name": "bling_vitor" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const cfg = $('Paginas supabase').first().json;\nconst COMPANY_ID = cfg.company_id;\nconst now = new Date().toISOString();\nconst lotes = $('Lotes retry').all();\nconst responses = $input.all();\nconst stockPayload = [];\nlet errosApi = 0;\nlet rateLimited = 0;\n\nfunction quantityFromRow(row) {\n  const direct = row.saldoFisico ?? row.saldo ?? row.quantidade ?? row.saldoVirtual ?? row.saldoFisicoTotal;\n  if (direct !== undefined && direct !== null) return Number(direct);\n  return null;\n}\n\nfor (let i = 0; i < responses.length; i++) {\n  const map = lotes[i]?.json?.map ?? {};\n  const item = responses[i].json;\n  if (item.error) {\n    errosApi += 1;\n    if (item.error?.type === 'TOO_MANY_REQUESTS') rateLimited += 1;\n    continue;\n  }\n  const rows = item.data ?? [];\n  if (!Array.isArray(rows)) continue;\n  for (const row of rows) {\n    const externalId = String(row.produto?.id ?? row.idProduto ?? '');\n    const productId = map[externalId];\n    if (!productId) continue;\n    const quantity = quantityFromRow(row);\n    if (quantity === null) continue;\n    stockPayload.push({ company_id: COMPANY_ID, product_id: productId, quantity, updated_at: now });\n  }\n}\n\nconst chunks = [];\nfor (let i = 0; i < stockPayload.length; i += 50) {\n  chunks.push({ json: { body: stockPayload.slice(i, i + 50), synced: stockPayload.length, rate_limited: rateLimited, erros_api: errosApi, supabase_url: cfg.supabase_url, skip_post: stockPayload.length === 0 } });\n}\nif (chunks.length === 0) {\n  chunks.push({ json: { body: [], synced: 0, rate_limited: rateLimited, erros_api: errosApi, supabase_url: cfg.supabase_url, skip_post: true } });\n}\nreturn chunks;"
+
+      },
+
+      "id": "e007g",
+
+      "name": "Montar retry",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [4220, -160]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "method": "POST",
+
+        "url": "={{ $json.supabase_url }}/rest/v1/current_stock?on_conflict=company_id,product_id",
+
+        "authentication": "predefinedCredentialType",
+
+        "nodeCredentialType": "supabaseApi",
+
+        "sendHeaders": true,
+
+        "headerParameters": {
+
+          "parameters": [
+
+            { "name": "Content-Type", "value": "application/json" },
+
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=minimal" }
+
+          ]
+
+        },
+
+        "sendBody": true,
+
+        "specifyBody": "json",
+
+        "jsonBody": "={{ $json.body }}",
+
+        "options": {
+
+          "response": { "response": { "neverError": true } }
+
+        }
+
+      },
+
+      "id": "e008b",
+
+      "name": "Supabase - Retry",
+
+      "type": "n8n-nodes-base.httpRequest",
+
+      "typeVersion": 4.2,
+
+      "position": [4440, -160],
+
+      "credentials": { "supabaseApi": { "name": "farol_supabase" } }
+
+    },
+
+    {
+
+      "parameters": {
+
+        "jsCode": "const m1 = $('Montar estoque').first().json;\nlet retrySynced = 0;\nlet retryRate = 0;\n\ntry {\n  const m2 = $('Montar retry').first()?.json;\n  if (m2) {\n    retrySynced = m2.synced ?? 0;\n    retryRate = m2.rate_limited ?? 0;\n  }\n} catch (e) {}\n\nconst totalSynced = (m1.synced ?? 0) + retrySynced;\nconst rateLeft = retryRate > 0 ? retryRate : (retrySynced > 0 ? 0 : (m1.rate_limited ?? 0));\n\nreturn [{\n  json: {\n    produtos_supabase: $('Consolidar produtos').first().json.total_produtos,\n    estoque_sincronizado: totalSynced,\n    erros_api: m1.erros_api ?? 0,\n    deposito_id: m1.deposito_id,\n    deposito: m1.deposito,\n    sem_depositos: m1.sem_depositos ?? 0,\n    rate_limited: rateLeft,\n    retry_sincronizado: retrySynced,\n    produtos_pendentes_retry: m1.retry_count ?? 0,\n    deposito_erro: rateLeft > 0 ? 'Ainda houve rate limit — aguarde 2 min e rode de novo' : '',\n    abortado: false,\n  },\n}];"
+
+      },
+
+      "id": "e009a",
+
+      "name": "Consolidar resultado",
+
+      "type": "n8n-nodes-base.code",
+
+      "typeVersion": 2,
+
+      "position": [3560, 80]
+
+    },
+
+    {
+
+      "parameters": {
+
+        "assignments": {
+
+          "assignments": [
+
+            { "id": "r1", "name": "produtos_supabase", "value": "={{ $json.produtos_supabase }}", "type": "number" },
+
+            { "id": "r2", "name": "estoque_sincronizado", "value": "={{ $json.estoque_sincronizado }}", "type": "number" },
+
+            { "id": "r3", "name": "erros_api", "value": "={{ $json.erros_api }}", "type": "number" },
+
+            { "id": "r4", "name": "deposito_id", "value": "={{ $json.deposito_id }}", "type": "string" },
+
+            { "id": "r5", "name": "deposito", "value": "={{ $json.deposito }}", "type": "string" },
+
+            { "id": "r6", "name": "sem_depositos", "value": "={{ $json.sem_depositos }}", "type": "number" },
+
+            { "id": "r7", "name": "rate_limited", "value": "={{ $json.rate_limited }}", "type": "number" },
+
+            { "id": "r8", "name": "retry_sincronizado", "value": "={{ $json.retry_sincronizado }}", "type": "number" },
+
+            { "id": "r9", "name": "deposito_erro", "value": "={{ $json.deposito_erro }}", "type": "string" },
+
+            { "id": "r10", "name": "abortado", "value": "={{ $json.abortado }}", "type": "boolean" }
+
+          ]
+
+        },
+
+        "options": {}
+
+      },
+
+      "id": "e009",
+
+      "name": "Resultado",
+
+      "type": "n8n-nodes-base.set",
+
+      "typeVersion": 3.4,
+
+      "position": [3340, 0]
+
+    }
+
+  ],
+
+  "connections": {
+
+    "Executar manualmente": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
+
+    "Config": { "main": [[{ "node": "Continuar sync", "type": "main", "index": 0 }]] },
+
+    "Continuar sync": { "main": [[{ "node": "deposito_id no Config?", "type": "main", "index": 0 }]] },
+
+    "deposito_id no Config?": {
+
+      "main": [
+
+        [{ "node": "Resolver manual", "type": "main", "index": 0 }],
+
+        [{ "node": "Pausa antes probe", "type": "main", "index": 0 }]
+
+      ]
+
+    },
+
+    "Resolver manual": { "main": [[{ "node": "Paginas supabase", "type": "main", "index": 0 }]] },
+
+    "Pausa antes probe": { "main": [[{ "node": "BLING - Probe estoque", "type": "main", "index": 0 }]] },
+
+    "BLING - Probe estoque": { "main": [[{ "node": "Resolver RajLog", "type": "main", "index": 0 }]] },
+
+    "Resolver RajLog": { "main": [[{ "node": "RajLog resolvido?", "type": "main", "index": 0 }]] },
+
+    "RajLog resolvido?": {
+
+      "main": [
+
+        [{ "node": "Paginas supabase", "type": "main", "index": 0 }],
+
+        [{ "node": "Resultado abortado", "type": "main", "index": 0 }]
+
+      ]
+
+    },
+
+    "Paginas supabase": { "main": [[{ "node": "Supabase - Produtos", "type": "main", "index": 0 }]] },
+
+    "Supabase - Produtos": { "main": [[{ "node": "Consolidar produtos", "type": "main", "index": 0 }]] },
+
+    "Consolidar produtos": { "main": [[{ "node": "Lotes estoque", "type": "main", "index": 0 }]] },
+
+    "Lotes estoque": { "main": [[{ "node": "BLING - Estoque", "type": "main", "index": 0 }]] },
+
+    "BLING - Estoque": { "main": [[{ "node": "Montar estoque", "type": "main", "index": 0 }]] },
+
+    "Montar estoque": { "main": [[{ "node": "Tem estoque?", "type": "main", "index": 0 }]] },
+
+    "Tem estoque?": {
+
+      "main": [
+
+        [{ "node": "Supabase - Estoque", "type": "main", "index": 0 }],
+
+        [{ "node": "Consolidar resultado", "type": "main", "index": 0 }]
+
+      ]
+
+    },
+
+    "Supabase - Estoque": { "main": [[{ "node": "Precisa retry?", "type": "main", "index": 0 }]] },
+
+    "Precisa retry?": {
+
+      "main": [
+
+        [{ "node": "Pausa retry", "type": "main", "index": 0 }],
+
+        [{ "node": "Consolidar resultado", "type": "main", "index": 0 }]
+
+      ]
+
+    },
+
+    "Pausa retry": { "main": [[{ "node": "Lotes retry", "type": "main", "index": 0 }]] },
+
+    "Lotes retry": { "main": [[{ "node": "BLING - Retry estoque", "type": "main", "index": 0 }]] },
+
+    "BLING - Retry estoque": { "main": [[{ "node": "Montar retry", "type": "main", "index": 0 }]] },
+
+    "Montar retry": { "main": [[{ "node": "Supabase - Retry", "type": "main", "index": 0 }]] },
+
+    "Supabase - Retry": { "main": [[{ "node": "Consolidar resultado", "type": "main", "index": 0 }]] },
+
+    "Consolidar resultado": { "main": [[{ "node": "Resultado", "type": "main", "index": 0 }]] }
+
+  },
+
+  "settings": {
+
+    "executionOrder": "v1",
+
+    "timeout": 7200
+
+  },
+
+  "pinData": {}
+
+}
+
+
