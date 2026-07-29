@@ -4,10 +4,12 @@ import { EffectiveStatus } from "@/lib/farolCalculations";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Search, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUp, ArrowDown, AlertTriangle, Store, Tags } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { StatusFilter } from "@/pages/Index";
 import { InlineMultipleInput } from "./InlineMultipleInput";
+import { ProductSuppliersSheet } from "./ProductSuppliersSheet";
+import { CommercialCatalogSheet } from "./CommercialCatalogSheet";
 import { formatProductLabel, productSku } from "@/lib/formatProduct";
 
 interface FarolFullTableProps {
@@ -61,7 +63,8 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  
+  const [suppliersProduct, setSuppliersProduct] = useState<FarolItem | null>(null);
+  const [catalogOpen, setCatalogOpen] = useState(false);
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -128,12 +131,23 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
           />
         </div>
 
-        <ToggleGroup
-          type="single"
-          value={statusFilter}
-          onValueChange={handleFilterChange}
-          className="justify-start flex-wrap"
-        >
+        <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center w-full sm:w-auto">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setCatalogOpen(true)}
+          >
+            <Tags className="h-3.5 w-3.5" />
+            Marcas e Categorias
+          </Button>
+          <ToggleGroup
+            type="single"
+            value={statusFilter}
+            onValueChange={handleFilterChange}
+            className="justify-start flex-wrap"
+          >
           <ToggleGroupItem value="all" size="sm" title="Todos os produtos">Todos</ToggleGroupItem>
           <ToggleGroupItem value="ruptura" size="sm" title="Sem estoque"><span className="font-bold text-destructive">✕</span> Ruptura</ToggleGroupItem>
           <ToggleGroupItem value="risco" size="sm" title="Risco de ruptura"><span className="font-bold text-destructive/80">✕</span> Risco</ToggleGroupItem>
@@ -141,7 +155,8 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
           <ToggleGroupItem value="green" size="sm" title="Estoque ok"><span className="font-bold text-success">✓</span> OK</ToggleGroupItem>
           <ToggleGroupItem value="neutral" size="sm" title="Sem consumo"><span className="font-bold text-muted-foreground/60">·</span></ToggleGroupItem>
           <ToggleGroupItem value="anomaly" size="sm" title="Anomalia"><AlertTriangle className="h-3.5 w-3.5 text-orange-500" /></ToggleGroupItem>
-        </ToggleGroup>
+          </ToggleGroup>
+        </div>
       </div>
 
       <div className="border border-border rounded-lg overflow-hidden bg-card">
@@ -164,6 +179,7 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
                 <th className="h-8 px-2 text-center align-middle font-medium text-muted-foreground w-[100px]">Status</th>
                 <th className="h-8 px-3 text-right align-middle font-medium text-muted-foreground min-w-[160px] w-[160px]">Compra</th>
                 <th className="h-8 px-2 text-center align-middle font-medium text-muted-foreground w-[50px]">Múlt.</th>
+                <th className="h-8 px-2 text-center align-middle font-medium text-muted-foreground w-[44px]">Forn.</th>
               </tr>
             </thead>
             <tbody>
@@ -239,12 +255,27 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
                         compact
                       />
                     </td>
+                    <td className="text-center py-1 px-1 align-middle">
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="Fornecedores"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSuppliersProduct(item);
+                        }}
+                      >
+                        <Store className={`h-3.5 w-3.5 ${item.supplier_id ? "text-primary" : "text-muted-foreground"}`} />
+                      </Button>
+                    </td>
                   </tr>
                 );
               })}
               {paged.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted-foreground py-8">
+                  <td colSpan={8} className="text-center text-muted-foreground py-8">
                     Nenhum produto encontrado.
                   </td>
                 </tr>
@@ -280,6 +311,20 @@ export function FarolFullTable({ items, statusFilter, onStatusFilterChange }: Fa
         </div>
       )}
 
+      <ProductSuppliersSheet
+        open={Boolean(suppliersProduct)}
+        onOpenChange={(open) => {
+          if (!open) setSuppliersProduct(null);
+        }}
+        productId={suppliersProduct?.product_id ?? null}
+        productName={
+          suppliersProduct
+            ? formatProductLabel(suppliersProduct)
+            : ""
+        }
+      />
+
+      <CommercialCatalogSheet open={catalogOpen} onOpenChange={setCatalogOpen} />
     </section>
   );
 }

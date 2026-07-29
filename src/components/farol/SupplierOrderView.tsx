@@ -4,13 +4,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
-import { ShoppingCart, Copy, Check, Store, X, AlertCircle, AlertTriangle, ChevronRight, FileText, ChevronLeft } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  ShoppingCart,
+  Copy,
+  Check,
+  Store,
+  X,
+  AlertCircle,
+  AlertTriangle,
+  ChevronRight,
+  FileText,
+  Tags,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { generateSupplierPdf } from "@/lib/generateSupplierPdf";
 import { formatProductLabel } from "@/lib/formatProduct";
+import {
+  buildPurchaseListHierarchy,
+  flattenPurchaseGroups,
+  itemPurchaseMetrics,
+  type CategoryBucket,
+  type PurchaseSortMode,
+  type SupplierBucket,
+} from "@/lib/purchaseListGrouping";
+import {
+  logisticsLabelFor,
+  useProductLogisticsMap,
+} from "@/hooks/useProductLogistics";
+import type { LogisticsLevel } from "@/lib/composeLogistics";
 
-const PAGE_SIZE = 10;
+function money(value: number) {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
 
 function StatusBadge({ status }: { status: string }) {
   const s = (status ?? "").toLowerCase();
@@ -38,25 +64,38 @@ function StatusBadge({ status }: { status: string }) {
   return <Badge variant="outline" className="text-[11px]">{status}</Badge>;
 }
 
-function generateOrderText(group: SupplierGroup): string {
+function generateOrderText(
+  group: SupplierBucket,
+  logisticsMap?: Map<string, LogisticsLevel[]>,
+) {
   const lines = [`Pedido de compra — ${group.supplier_name}\n`];
   for (const item of group.items) {
     const qty = Math.round(item.sugestao_compra ?? 0);
-    lines.push(`• ${formatProductLabel(item)} — ${qty} un.`);
+    const logistics = logisticsLabelFor(qty, logisticsMap?.get(item.product_id));
+    lines.push(`• ${formatProductLabel(item)} — ${qty} un. (${logistics})`);
   }
   lines.push(`\nTotal: ${group.totalUnits} unidades`);
+  if (group.totalValue > 0) lines.push(`Valor: ${money(group.totalValue)}`);
   return lines.join("\n");
 }
 
-function SupplierItemRow({ item }: { item: FarolItem }) {
-  const qty = Math.round(item.sugestao_compra ?? 0);
-  const mult = item.purchase_multiple ?? 1;
-  const cost = item.cost_price;
-  const totalCost = cost != null ? qty * cost : null;
+function SupplierItemRow({
+  item,
+  logisticsMap,
+}: {
+  item: FarolItem;
+  logisticsMap?: Map<string, LogisticsLevel[]>;
+}) {
+  const { qty, boxes, value } = itemPurchaseMetrics(item);
   const isRuptura = (item.status_estoque ?? "").toLowerCase().includes("ruptura");
+  const logistics = logisticsLabelFor(qty, logisticsMap?.get(item.product_id));
 
   return (
-    <div className={`flex items-center justify-between gap-3 py-2 px-3 rounded-md ${isRuptura ? "bg-destructive/5" : "hover:bg-muted/40"} transition-colors`}>
+    <div
+      className={`flex items-center justify-between gap-3 py-2 px-3 rounded-md ${
+        isRuptura ? "bg-destructive/5" : "hover:bg-muted/40"
+      } transition-colors`}
+    >
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <StatusBadge status={item.status_estoque ?? ""} />
         <TooltipProvider>
@@ -70,35 +109,38 @@ function SupplierItemRow({ item }: { item: FarolItem }) {
           </Tooltip>
         </TooltipProvider>
       </div>
-      <div className="flex items-center shrink-0 whitespace-nowrap min-w-[120px] text-right">
-        <span className="text-base font-bold text-primary tabular-nums">{qty}</span>
-        <span className="text-[11px] text-muted-foreground ml-1">un.</span>
-        {mult > 1 && (
-          <span className="text-[11px] text-muted-foreground/70 ml-1">| {Math.ceil(qty / mult)} cx</span>
-        )}
-        {totalCost != null && (
-          <span className="text-[11px] text-muted-foreground/60 ml-1.5">• {totalCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-        )}
+      <div className="flex flex-col items-end shrink-0 min-w-[140px] text-right gap-0.5">
+        <div className="flex items-center whitespace-nowrap">
+          <span className="text-base font-bold text-primary tabular-nums">{qty}</span>
+          <span className="text-[11px] text-muted-foreground ml-1">un.</span>
+          {boxes > 0 && (
+            <span className="text-[11px] text-muted-foreground/70 ml-1">| {boxes} cx</span>
+          )}
+          {value > 0 && (
+            <span className="text-[11px] text-muted-foreground/60 ml-1.5">• {money(value)}</span>
+          )}
+        </div>
+        <span className="text-[11px] text-muted-foreground leading-tight max-w-[220px]">
+          Sugestão logística: {logistics}
+        </span>
       </div>
     </div>
   );
 }
 
-function SupplierRow({ group }: { group: SupplierGroup }) {
+function SupplierBlock({
+  group,
+  logisticsMap,
+}: {
+  group: SupplierBucket;
+  logisticsMap?: Map<string, LogisticsLevel[]>;
+}) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const totalCost = group.items.reduce((sum, item) => {
-    const qty = Math.round(item.sugestao_compra ?? 0);
-    const cost = item.cost_price;
-    return cost != null ? sum + qty * cost : sum;
-  }, 0);
-  const hasCost = group.items.some(i => i.cost_price != null);
-
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = generateOrderText(group);
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(generateOrderText(group, logisticsMap));
     setCopied(true);
     toast({ title: "Pedido copiado!", description: "Cole no WhatsApp ou e-mail." });
     setTimeout(() => setCopied(false), 2000);
@@ -106,95 +148,111 @@ function SupplierRow({ group }: { group: SupplierGroup }) {
 
   const handleWhatsApp = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const text = generateOrderText(group);
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(generateOrderText(group, logisticsMap))}`,
+      "_blank",
+    );
   };
 
-  const hasRuptura = group.items.some(i => (i.status_estoque ?? "").toLowerCase().includes("ruptura"));
-  const hasRisco = !hasRuptura && group.items.some(i => (i.status_estoque ?? "").toLowerCase().includes("risco"));
-  const hasAtencao = !hasRuptura && !hasRisco && group.items.some(i => (i.status_estoque ?? "").toLowerCase().includes("atenção"));
-
-  const urgentCount = group.items.filter(i => {
-    const s = (i.status_estoque ?? "").toLowerCase();
-    return s.includes("ruptura") || s.includes("risco");
-  }).length;
-
-  const borderClass = hasRuptura
-    ? "border-destructive/40 bg-destructive/[0.03]"
-    : hasRisco
-      ? "border-orange-400/40 bg-orange-50/30 dark:bg-orange-950/10"
-      : hasAtencao
-        ? "border-yellow-400/40 bg-yellow-50/30 dark:bg-yellow-950/10"
-        : "border-border/60 bg-card";
+  const pdfGroup: SupplierGroup = {
+    supplier_id: group.supplier_id,
+    supplier_name: group.supplier_name,
+    items: group.items,
+    totalUnits: group.totalUnits,
+  };
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className={`rounded-lg border transition-colors ${borderClass}`}>
+      <div className="rounded-md border border-border/60 bg-card">
         <CollapsibleTrigger asChild>
-          <button className="w-full flex items-center gap-3 px-4 py-3.5 min-h-[80px] text-left hover:bg-muted/30 transition-colors rounded-t-lg">
-            <ChevronRight className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200 ${open ? "rotate-90" : ""}`} />
-            <Store className="h-4 w-4 text-primary shrink-0" />
+          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors">
+            <ChevronRight
+              className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            />
+            <Store className="h-3.5 w-3.5 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-foreground truncate">{group.supplier_name}</p>
-              <p className="text-xs text-muted-foreground">
-                {group.items.length} produto{group.items.length !== 1 ? "s" : ""} · {group.totalUnits} un.
-                {hasCost && (
-                  <span className="font-medium"> · {totalCost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</span>
-                )}
-                {urgentCount > 0 && (
-                  <span className="text-destructive font-medium"> · {urgentCount} urgente{urgentCount !== 1 ? "s" : ""}</span>
-                )}
+              <p className="text-sm font-medium truncate">{group.supplier_name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {group.itemCount} item{group.itemCount !== 1 ? "s" : ""} · {group.totalUnits} un.
+                {group.totalBoxes > 0 ? ` · ${group.totalBoxes} cx` : ""}
+                {group.totalValue > 0 ? ` · ${money(group.totalValue)}` : ""}
               </p>
-              {hasRuptura && (
-                <p className="text-[11px] text-destructive mt-0.5 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" /> Contém itens sem estoque
-                </p>
-              )}
             </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleCopy}>
-                      {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Copiar pedido</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={handleWhatsApp}>
-                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-                      </svg>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Enviar por WhatsApp</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); generateSupplierPdf(group); }}>
-                      <FileText className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Gerar PDF</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCopy}>
+                {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+              </Button>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleWhatsApp}>
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                </svg>
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7"
+                onClick={() => generateSupplierPdf(pdfGroup)}
+              >
+                <FileText className="h-3.5 w-3.5" />
+              </Button>
             </div>
           </button>
         </CollapsibleTrigger>
-
         <CollapsibleContent>
-          <div className="px-4 pb-3 pt-1 space-y-0.5 border-t border-border/30">
+          <div className="px-3 pb-2 pt-1 space-y-0.5 border-t border-border/30">
             {group.items.map((item) => (
-              <SupplierItemRow key={item.product_id} item={item} />
+              <SupplierItemRow
+                key={item.product_id}
+                item={item}
+                logisticsMap={logisticsMap}
+              />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
+
+function CategoryBlock({
+  category,
+  defaultOpen,
+  logisticsMap,
+}: {
+  category: CategoryBucket;
+  defaultOpen: boolean;
+  logisticsMap?: Map<string, LogisticsLevel[]>;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="rounded-lg border border-border bg-card/60">
+        <CollapsibleTrigger asChild>
+          <button className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors rounded-t-lg">
+            <ChevronRight
+              className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            />
+            <Tags className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate">{category.category_name}</p>
+              <p className="text-xs text-muted-foreground">
+                {category.suppliers.length} fornecedor{category.suppliers.length !== 1 ? "es" : ""} ·{" "}
+                {category.itemCount} item{category.itemCount !== 1 ? "s" : ""} · {category.totalUnits} un.
+                {category.totalBoxes > 0 ? ` · ${category.totalBoxes} cx` : ""}
+                {category.totalValue > 0 ? ` · ${money(category.totalValue)}` : ""}
+              </p>
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="px-3 pb-3 pt-1 space-y-2 border-t border-border/40">
+            {category.suppliers.map((supplier) => (
+              <SupplierBlock
+                key={`${category.category_id}-${supplier.supplier_id}`}
+                group={supplier}
+                logisticsMap={logisticsMap}
+              />
             ))}
           </div>
         </CollapsibleContent>
@@ -207,26 +265,27 @@ interface SupplierOrderViewProps {
   groups: SupplierGroup[];
 }
 
+const SORT_OPTIONS: { value: PurchaseSortMode; label: string }[] = [
+  { value: "priority", label: "Prioridade" },
+  { value: "category", label: "Categoria" },
+  { value: "supplier", label: "Fornecedor" },
+  { value: "value", label: "Valor" },
+];
+
 export function SupplierOrderView({ groups }: SupplierOrderViewProps) {
-  const [page, setPage] = useState(1);
-  const totalProducts = groups.reduce((s, g) => s + g.items.length, 0);
-  const totalUnits = groups.reduce((s, g) => s + g.totalUnits, 0);
-  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const [sortMode, setSortMode] = useState<PurchaseSortMode>("priority");
 
-  useEffect(() => {
-    setPage(1);
-  }, [groups.length]);
+  const items = useMemo(() => flattenPurchaseGroups(groups), [groups]);
+  const productIds = useMemo(() => items.map((i) => i.product_id), [items]);
+  const logisticsQuery = useProductLogisticsMap(productIds);
+  const logisticsMap = logisticsQuery.data;
 
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
+  const { categories, totals } = useMemo(
+    () => buildPurchaseListHierarchy(items, sortMode),
+    [items, sortMode],
+  );
 
-  const pageGroups = useMemo(() => {
-    const start = (page - 1) * PAGE_SIZE;
-    return groups.slice(start, start + PAGE_SIZE);
-  }, [groups, page]);
-
-  if (totalProducts === 0) {
+  if (totals.itemCount === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-3">
         <ShoppingCart className="h-10 w-10 text-muted-foreground/40" />
@@ -236,62 +295,103 @@ export function SupplierOrderView({ groups }: SupplierOrderViewProps) {
     );
   }
 
-  const from = (page - 1) * PAGE_SIZE + 1;
-  const to = Math.min(page * PAGE_SIZE, groups.length);
+  const supplierTotals = categories
+    .flatMap((c) => c.suppliers)
+    .reduce(
+      (acc, s) => {
+        const prev = acc.get(s.supplier_id);
+        if (!prev) {
+          acc.set(s.supplier_id, {
+            name: s.supplier_name,
+            value: s.totalValue,
+            units: s.totalUnits,
+            items: s.itemCount,
+          });
+        } else {
+          prev.value += s.totalValue;
+          prev.units += s.totalUnits;
+          prev.items += s.itemCount;
+        }
+        return acc;
+      },
+      new Map<string, { name: string; value: number; units: number; items: number }>(),
+    );
+
+  const allSuppliers = [...supplierTotals.values()].sort(
+    (a, b) => b.value - a.value || b.units - a.units || a.name.localeCompare(b.name, "pt-BR"),
+  );
 
   return (
     <div className="space-y-4">
       <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="p-4">
-          <p className="text-base font-semibold text-foreground">
-            Você precisa comprar {totalProducts} produto{totalProducts !== 1 ? "s" : ""} ({totalUnits} unidades)
-          </p>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Dividido em {groups.length} fornecedor{groups.length !== 1 ? "es" : ""} — expanda para ver os itens
-          </p>
+        <CardContent className="p-4 space-y-3">
+          <div>
+            <p className="text-base font-semibold text-foreground">
+              Total geral: {totals.itemCount} item{totals.itemCount !== 1 ? "s" : ""} · {totals.totalUnits} un.
+              {totals.totalBoxes > 0 ? ` · ${totals.totalBoxes} cx` : ""}
+              {totals.totalValue > 0 ? ` · ${money(totals.totalValue)}` : ""}
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {totals.categoryCount} categoria{totals.categoryCount !== 1 ? "s" : ""} ·{" "}
+              {totals.supplierCount} fornecedor{totals.supplierCount !== 1 ? "es" : ""}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 text-xs">
+            <div className="rounded-md border border-border/50 bg-background/60 p-2.5 space-y-1 max-h-40 overflow-y-auto">
+              <p className="font-medium text-foreground sticky top-0 bg-background/95">Por categoria</p>
+              {categories.map((c) => (
+                <div key={c.category_id} className="flex justify-between gap-2 text-muted-foreground">
+                  <span className="truncate">{c.category_name}</span>
+                  <span className="tabular-nums shrink-0">
+                    {c.totalUnits} un.
+                    {c.totalValue > 0 ? ` · ${money(c.totalValue)}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-md border border-border/50 bg-background/60 p-2.5 space-y-1 max-h-40 overflow-y-auto">
+              <p className="font-medium text-foreground sticky top-0 bg-background/95">Por fornecedor</p>
+              {allSuppliers.map((s) => (
+                <div key={s.name} className="flex justify-between gap-2 text-muted-foreground">
+                  <span className="truncate">{s.name}</span>
+                  <span className="tabular-nums shrink-0">
+                    {s.units} un.
+                    {s.value > 0 ? ` · ${money(s.value)}` : ""}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
-      <div className="space-y-2">
-        {pageGroups.map((group) => (
-          <SupplierRow key={group.supplier_id} group={group} />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Ordenar por</span>
+        {SORT_OPTIONS.map((opt) => (
+          <Button
+            key={opt.value}
+            type="button"
+            size="sm"
+            variant={sortMode === opt.value ? "default" : "outline"}
+            className="h-7 text-xs"
+            onClick={() => setSortMode(opt.value)}
+          >
+            {opt.label}
+          </Button>
         ))}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between gap-3 pt-1">
-          <p className="text-xs text-muted-foreground">
-            Fornecedores {from}–{to} de {groups.length}
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Anterior
-            </Button>
-            <span className="text-xs tabular-nums text-muted-foreground min-w-[4.5rem] text-center">
-              {page} / {totalPages}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-8 gap-1"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              Próxima
-              <ChevronRight className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="space-y-3">
+        {categories.map((category, idx) => (
+          <CategoryBlock
+            key={category.category_id}
+            category={category}
+            defaultOpen={idx < 3}
+            logisticsMap={logisticsMap}
+          />
+        ))}
+      </div>
     </div>
   );
 }

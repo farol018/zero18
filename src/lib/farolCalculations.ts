@@ -6,6 +6,8 @@ export type FarolCalcInput = {
   window_days: number;
   coverage_days: number;
   purchase_multiple: number;
+  /** Dias de lead time do fornecedor primary; null/undefined = 0 (comportamento legado). */
+  lead_time_days?: number | null;
 };
 
 export type FarolCalcResult = {
@@ -32,7 +34,8 @@ export function mapStatusFarol(statusFarol: string | null, estoque: number): Eff
 export function calculateFarolMetrics(input: FarolCalcInput): FarolCalcResult {
   const estoque = input.estoque_atual ?? 0;
   const windowDays = Math.max(1, input.window_days);
-  const coverageDays = Math.max(1, input.coverage_days);
+  const leadTimeDays = Math.max(0, input.lead_time_days ?? 0);
+  const coverageDays = Math.max(1, input.coverage_days) + leadTimeDays;
   const multiple = Math.max(1, input.purchase_multiple ?? 1);
   const totalSaida = Math.max(0, input.total_saida ?? 0);
   const consumoDia = totalSaida > 0 ? totalSaida / windowDays : 0;

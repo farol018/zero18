@@ -14,6 +14,89 @@ export type Database = {
   }
   public: {
     Tables: {
+      brands: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brands_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          active: boolean
+          company_id: string
+          created_at: string
+          external_id: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          company_id: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          company_id?: string
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "categories_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           consumption_window_days: number
@@ -439,12 +522,159 @@ export type Database = {
           },
         ]
       }
+      product_logistics: {
+        Row: {
+          id: string
+          company_id: string
+          product_id: string
+          unit_name: string
+          base_units: number
+          level_order: number
+          active: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          company_id: string
+          product_id: string
+          unit_name: string
+          base_units: number
+          level_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          company_id?: string
+          product_id?: string
+          unit_name?: string
+          base_units?: number
+          level_order?: number
+          active?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_logistics_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_logistics_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_suppliers: {
+        Row: {
+          company_id: string
+          cost_price: number | null
+          created_at: string
+          external_ref: string | null
+          id: string
+          is_active: boolean
+          is_primary: boolean
+          lead_time_days: number | null
+          min_order_qty: number | null
+          notes: string | null
+          product_id: string
+          purchase_multiple: number
+          source: string
+          supplier_id: string
+          supplier_sku: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          cost_price?: number | null
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          lead_time_days?: number | null
+          min_order_qty?: number | null
+          notes?: string | null
+          product_id: string
+          purchase_multiple?: number
+          source?: string
+          supplier_id: string
+          supplier_sku?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          cost_price?: number | null
+          created_at?: string
+          external_ref?: string | null
+          id?: string
+          is_active?: boolean
+          is_primary?: boolean
+          lead_time_days?: number | null
+          min_order_qty?: number | null
+          notes?: string | null
+          product_id?: string
+          purchase_multiple?: number
+          source?: string
+          supplier_id?: string
+          supplier_sku?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_suppliers_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "farol_inteligencia"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_suppliers_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "farol_pedido_fornecedor"
+            referencedColumns: ["supplier_id"]
+          },
+        ]
+      }
       products: {
         Row: {
+          brand_id: string | null
+          category_id: string | null
           company_id: string
           cost_price: number | null
           created_at: string | null
           external_id: string | null
+          gtin: string | null
           id: string
           name: string
           purchase_multiple: number | null
@@ -453,10 +683,13 @@ export type Database = {
           unit: string | null
         }
         Insert: {
+          brand_id?: string | null
+          category_id?: string | null
           company_id: string
           cost_price?: number | null
           created_at?: string | null
           external_id?: string | null
+          gtin?: string | null
           id?: string
           name: string
           purchase_multiple?: number | null
@@ -465,10 +698,13 @@ export type Database = {
           unit?: string | null
         }
         Update: {
+          brand_id?: string | null
+          category_id?: string | null
           company_id?: string
           cost_price?: number | null
           created_at?: string | null
           external_id?: string | null
+          gtin?: string | null
           id?: string
           name?: string
           purchase_multiple?: number | null
@@ -489,6 +725,20 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_brand_id_fkey"
+            columns: ["brand_id"]
+            isOneToOne: false
+            referencedRelation: "brands"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
             referencedColumns: ["id"]
           },
           {
@@ -531,46 +781,42 @@ export type Database = {
       }
       purchase_items: {
         Row: {
-          company_id: string
           id: string
-          product_id: string | null
-          purchase_id: string | null
+          purchase_id: string
+          product_id: string
+          product_supplier_id: string | null
           quantity: number
-          total_price: number | null
-          unit_price: number
+          unit_cost: number
+          total_cost: number
+          created_at: string
         }
         Insert: {
-          company_id: string
           id?: string
-          product_id?: string | null
-          purchase_id?: string | null
+          purchase_id: string
+          product_id: string
+          product_supplier_id?: string | null
           quantity: number
-          total_price?: number | null
-          unit_price: number
+          unit_cost: number
+          total_cost: number
+          created_at?: string
         }
         Update: {
-          company_id?: string
           id?: string
-          product_id?: string | null
-          purchase_id?: string | null
+          purchase_id?: string
+          product_id?: string
+          product_supplier_id?: string | null
           quantity?: number
-          total_price?: number | null
-          unit_price?: number
+          unit_cost?: number
+          total_cost?: number
+          created_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "purchase_items_company_id_fkey"
-            columns: ["company_id"]
+            foreignKeyName: "purchase_items_purchase_id_fkey"
+            columns: ["purchase_id"]
             isOneToOne: false
-            referencedRelation: "companies"
+            referencedRelation: "purchases"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchase_items_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "farol_inteligencia"
-            referencedColumns: ["product_id"]
           },
           {
             foreignKeyName: "purchase_items_product_id_fkey"
@@ -580,38 +826,62 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "purchase_items_purchase_id_fkey"
-            columns: ["purchase_id"]
+            foreignKeyName: "purchase_items_product_supplier_id_fkey"
+            columns: ["product_supplier_id"]
             isOneToOne: false
-            referencedRelation: "purchases"
+            referencedRelation: "product_suppliers"
             referencedColumns: ["id"]
           },
         ]
       }
       purchases: {
         Row: {
-          company_id: string
-          created_at: string | null
           id: string
-          purchase_date: string
-          supplier_id: string | null
-          total: number | null
+          company_id: string
+          supplier_id: string
+          issued_at: string
+          received_at: string | null
+          invoice_number: string | null
+          invoice_series: string | null
+          total_amount: number
+          status: string
+          notes: string | null
+          source: string
+          external_id: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          company_id: string
-          created_at?: string | null
           id?: string
-          purchase_date: string
-          supplier_id?: string | null
-          total?: number | null
+          company_id: string
+          supplier_id: string
+          issued_at?: string
+          received_at?: string | null
+          invoice_number?: string | null
+          invoice_series?: string | null
+          total_amount?: number
+          status?: string
+          notes?: string | null
+          source?: string
+          external_id?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          company_id?: string
-          created_at?: string | null
           id?: string
-          purchase_date?: string
-          supplier_id?: string | null
-          total?: number | null
+          company_id?: string
+          supplier_id?: string
+          issued_at?: string
+          received_at?: string | null
+          invoice_number?: string | null
+          invoice_series?: string | null
+          total_amount?: number
+          status?: string
+          notes?: string | null
+          source?: string
+          external_id?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: [
           {
@@ -620,13 +890,6 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "purchases_supplier_id_fkey"
-            columns: ["supplier_id"]
-            isOneToOne: false
-            referencedRelation: "farol_pedido_fornecedor"
-            referencedColumns: ["supplier_id"]
           },
           {
             foreignKeyName: "purchases_supplier_id_fkey"
@@ -683,6 +946,7 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string | null
+          document: string | null
           external_id: string | null
           id: string
           name: string
@@ -690,6 +954,7 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string | null
+          document?: string | null
           external_id?: string | null
           id?: string
           name: string
@@ -697,6 +962,7 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string | null
+          document?: string | null
           external_id?: string | null
           id?: string
           name?: string

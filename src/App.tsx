@@ -17,18 +17,12 @@ const queryClient = new QueryClient({
     },
   },
 });
-const SKIP_AUTH = import.meta.env.VITE_SKIP_AUTH === "true";
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const [ready, setReady] = useState(false);
-  const [isAuthed, setIsAuthed] = useState(SKIP_AUTH);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   useEffect(() => {
-    if (SKIP_AUTH) {
-      setReady(true);
-      return;
-    }
-
     let cancelled = false;
 
     supabase.auth.getSession().then(({ data }) => {
@@ -49,7 +43,14 @@ const ProtectedRoute = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-6">
+        <p className="text-sm text-muted-foreground">Verificando autenticação…</p>
+      </div>
+    );
+  }
+
   return isAuthed ? <>{children}</> : <Navigate to="/login" replace />;
 };
 
@@ -61,7 +62,7 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={SKIP_AUTH ? <Navigate to="/" replace /> : <Login />} />
+            <Route path="/login" element={<Login />} />
             <Route
               path="/"
               element={

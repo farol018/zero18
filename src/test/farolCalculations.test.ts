@@ -63,4 +63,37 @@ describe("calculateFarolMetrics", () => {
     expect(result.quantidade_sugerida).toBe(132);
     expect(result.effective_status).toBe("anomaly");
   });
+
+  it("FEATURE 005: lead_time aumenta a cobertura alvo da sugestão", () => {
+    const withoutLead = calculateFarolMetrics({
+      estoque_atual: 0,
+      total_saida: 70,
+      window_days: 7,
+      coverage_days: 7,
+      purchase_multiple: 1,
+    });
+    const withLead = calculateFarolMetrics({
+      estoque_atual: 0,
+      total_saida: 70,
+      window_days: 7,
+      coverage_days: 7,
+      purchase_multiple: 1,
+      lead_time_days: 3,
+    });
+    // consumo 10/dia; cobertura 7 → 70; cobertura 10 → 100
+    expect(withoutLead.quantidade_sugerida).toBe(70);
+    expect(withLead.quantidade_sugerida).toBe(100);
+  });
+
+  it("FEATURE 005: lead_time null mantém comportamento legado", () => {
+    const result = calculateFarolMetrics({
+      estoque_atual: 0,
+      total_saida: 70,
+      window_days: 7,
+      coverage_days: 7,
+      purchase_multiple: 1,
+      lead_time_days: null,
+    });
+    expect(result.quantidade_sugerida).toBe(70);
+  });
 });

@@ -7,11 +7,8 @@ import {
   statusPriority,
   type EffectiveStatus,
 } from "@/lib/farolCalculations";
+import { resolveSupplierDualRead } from "@/lib/resolveSupplierDualRead";
 import { fetchAllRows } from "@/lib/supabasePaginate";
-import { buildPeriodConfig, type PeriodConfig, type PeriodOption } from "@/hooks/useFarolDynamic";
-
-export type { PeriodOption, PeriodConfig };
-export { buildPeriodConfig };
 
 export type ViewMode = "pedido" | "analise";
 
@@ -31,6 +28,8 @@ export type FarolItem = {
   sku: string | null;
   supplier_id: string | null;
   supplier_name: string | null;
+  category_id: string | null;
+  category_name: string | null;
 };
 
 export type SupplierGroup = {
@@ -69,7 +68,60 @@ type ProductMeta = {
   cost_price: number | null;
   external_id: string | null;
   sku: string | null;
+  category_id: string | null;
+  category_name: string | null;
 };
+
+async function fetchPrimaryLinksByProductIds(
+  ids: string[],
+): Promise<Map<string, { supplier_id: string; purchase_multiple: number | null; cost_price: number | null }>> {
+  const unique = [...new Set(ids)];
+  const map = new Map<
+    string,
+    { supplier_id: string; purchase_multiple: number | null; cost_price: number | null }
+  >();
+  if (unique.length === 0) return map;
+
+  const chunkSize = 200;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("product_suppliers")
+      .select("product_id, supplier_id, purchase_multiple, cost_price")
+      .in("product_id", chunk)
+      .eq("is_primary", true)
+      .eq("is_active", true);
+
+    if (error) throw error;
+    for (const row of data ?? []) {
+      map.set(row.product_id, {
+        supplier_id: row.supplier_id,
+        purchase_multiple: row.purchase_multiple,
+        cost_price: row.cost_price,
+      });
+    }
+  }
+
+  return map;
+}
+
+async function fetchCategoriesByIds(ids: string[]): Promise<Map<string, string>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  const map = new Map<string, string>();
+  if (unique.length === 0) return map;
+
+  const chunkSize = 200;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const { data, error } = await supabase
+      .from("categories")
+      .select("id, name")
+      .in("id", chunk);
+    if (error) throw error;
+    for (const c of data ?? []) map.set(c.id, c.name);
+  }
+  return map;
+}
 
 async function fetchProductsByIds(ids: string[]): Promise<ProductMeta[]> {
   const unique = [...new Set(ids)];
@@ -77,16 +129,54 @@ async function fetchProductsByIds(ids: string[]): Promise<ProductMeta[]> {
 
   const chunkSize = 200;
   const all: ProductMeta[] = [];
+  const primaryLinks = await fetchPrimaryLinksByProductIds(unique);
+  const rawRows: Array<{
+    id: string;
+    supplier_id: string | null;
+    purchase_multiple: number | null;
+    cost_price: number | null;
+    external_id: string | null;
+    sku: string | null;
+    category_id: string | null;
+  }> = [];
 
   for (let i = 0; i < unique.length; i += chunkSize) {
     const chunk = unique.slice(i, i + chunkSize);
     const { data, error } = await supabase
       .from("products")
-      .select("id, supplier_id, purchase_multiple, cost_price, external_id, sku")
+      .select("id, supplier_id, purchase_multiple, cost_price, external_id, sku, category_id")
       .in("id", chunk);
 
     if (error) throw error;
-    all.push(...(data ?? []));
+    rawRows.push(...(data ?? []));
+  }
+
+  const categoryMap = await fetchCategoriesByIds(
+    rawRows.map((r) => r.category_id).filter(Boolean) as string[],
+  );
+
+  for (const row of rawRows) {
+    const resolved = resolveSupplierDualRead(
+      {
+        supplier_id: row.supplier_id,
+        purchase_multiple: row.purchase_multiple,
+        cost_price: row.cost_price,
+      },
+      primaryLinks.get(row.id),
+    );
+
+    all.push({
+      id: row.id,
+      supplier_id: resolved.supplier_id,
+      purchase_multiple: resolved.purchase_multiple,
+      cost_price: resolved.cost_price,
+      external_id: row.external_id,
+      sku: row.sku,
+      category_id: row.category_id,
+      category_name: row.category_id
+        ? categoryMap.get(row.category_id) ?? "Sem categoria"
+        : null,
+    });
   }
 
   return all;
@@ -144,6 +234,8 @@ function rowToItem(
     sku: meta?.sku ?? null,
     supplier_id: meta?.supplier_id ?? null,
     supplier_name: supplierName ?? "Sem fornecedor",
+    category_id: meta?.category_id ?? null,
+    category_name: meta?.category_name ?? null,
   };
 }
 
@@ -218,22 +310,25 @@ function buildPurchaseGroups(
   return purchaseGroups;
 }
 
-export function useFarol(period: PeriodConfig, mode: ViewMode = "pedido") {
+export function useFarol(mode: ViewMode = "pedido") {
   const { companyId, consumptionWindowDays } = useCompany();
 
   return useQuery({
-    queryKey: [
-      "farol",
-      companyId,
-      consumptionWindowDays,
-      mode,
-      period.option,
-      period.days,
-    ],
+    queryKey: ["farol", companyId, consumptionWindowDays, mode],
     queryFn: async () => {
+      if (!companyId) {
+        throw new Error("Empresa não resolvida. Faça login novamente.");
+      }
+
       if (mode === "pedido") {
-        const [listaRes, summaryRows] = await Promise.all([
-          supabase.from("farol_lista_compra").select("*").eq("company_id", companyId),
+        const [lista, summaryRows] = await Promise.all([
+          fetchAllRows((from, to) =>
+            supabase
+              .from("farol_lista_compra")
+              .select("*")
+              .eq("company_id", companyId)
+              .range(from, to),
+          ),
           fetchAllRows((from, to) =>
             supabase
               .from("stock_analysis")
@@ -243,9 +338,6 @@ export function useFarol(period: PeriodConfig, mode: ViewMode = "pedido") {
           ),
         ]);
 
-        if (listaRes.error) throw listaRes.error;
-
-        const lista = listaRes.data ?? [];
         const productIds = lista.map((row) => row.product_id).filter(Boolean) as string[];
         const products = await fetchProductsByIds(productIds);
         const productMap = new Map(products.map((p) => [p.id, p]));
