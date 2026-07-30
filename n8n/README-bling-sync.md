@@ -23,8 +23,9 @@ Integração do [BLING API v3](https://developer.bling.com.br/bling-api) com o F
 
 | Arquivo | O que faz | Agendamento sugerido |
 |---------|-----------|----------------------|
-| `farol-bling-sync-produtos.json` (v12) | `/contatos` → `suppliers` (todos) + `/produtos` → catálogo | 1×/dia (05:30) |
-| `farol-bling-vincular-fornecedores.json` | Detalhe BLING → upsert `contato` + `products.supplier_id` | após Sync Produtos |
+| `farol-bling-sync-produtos.json` (v14 / PATCH 011.1) | `/contatos` → `suppliers` (todos, + `document`) + `/produtos` → catálogo | 1×/dia (05:30) |
+| `farol-bling-vincular-fornecedores.json` (v8 / PATCH 011.1) | Detalhe BLING → upsert `contato` + `supplier_id` + `purchase_multiple` + `gtin` (oportunista) | após Sync Produtos |
+| `farol-bling-backfill-gtin.json` (**temporário**) | Catálogo `gtin IS NULL` → `GET /produtos/{id}` → PATCH `gtin` | manual, até zerar backlog |
 | `farol-bling-sync-estoque.json` | Saldo atual → `current_stock` | a cada 4h |
 | `farol-bling-sync-vendas.json` | NF-e saída séries 1 e 4 → `inventory_movements` (14 dias) | a cada 4h / 1h30 |
 
@@ -47,8 +48,19 @@ Integração do [BLING API v3](https://developer.bling.com.br/bling-api) com o F
 |-------|----------|
 | `id` | `suppliers.external_id` |
 | `nome` | `suppliers.name` |
+| `numeroDocumento` (fallback: `cpfCnpj`, `documento`) | `suppliers.document` (somente dígitos; omitido se vazio) |
 
 A listagem `/contatos` **não** traz o tipo Fornecedor de forma confiável — o sync grava **todos** os contatos em `suppliers`. O vínculo real produto↔fornecedor vem do **Vincular** (`GET /produtos/{id}` → `fornecedor.id`).
+
+### GTIN (`GET /produtos/{id}` — PATCH 011.1)
+
+| BLING | Supabase | Onde |
+|-------|----------|------|
+| `gtin` (fallback `gtinEmbalagem`) | `products.gtin` | Vincular (quando a fila já detalha) + Backfill temporário |
+
+- Fila do Vincular **não** muda (continua `supplier_id` / `purchase_multiple`).
+- Nunca grava string vazia / `null` sobre GTIN ou documento já válidos (campo omitido no payload).
+- Backfill: ver `farol-bling-backfill-gtin.json` — remover após esgotar o catálogo.
 
 ### Estoque (`GET /estoques/saldos`)
 

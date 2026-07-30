@@ -1,0 +1,330 @@
+{
+  "name": "FAROL — Backfill GTIN (temporário / PATCH 011.1)",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Backfill GTIN — TEMPORÁRIO (PATCH 011.1)\n\nObjetivo: enriquecer catálogo já sincronizado.\n\nCritério:\n`products` com `external_id` NOT NULL e `gtin` IS NULL\n\nFluxo: lote → GET /produtos/{id} → extrair gtin → PATCH\n\nIdempotente: 2ª execução não altera GTIN já preenchido.\n\nApós esgotar o backlog: desative/apague este workflow.",
+        "height": 280,
+        "width": 480
+      },
+      "id": "bf001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-420, -100]
+    },
+    {
+      "parameters": {},
+      "id": "bf002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-140, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "company_id",
+              "value": "04c9b2c3-1c6e-439b-949a-486e4917b13c",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "supabase_url",
+              "value": "https://ilrebasidmyltziuibyc.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "bling_base_url",
+              "value": "https://api.bling.com.br/Api/v3",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "lote_size",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "max_por_execucao",
+              "value": 120,
+              "type": "number"
+            },
+            {
+              "id": "a6",
+              "name": "bling_interval_ms",
+              "value": 4000,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bf003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [80, 0]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.supabase_url }}/rest/v1/products?company_id=eq.{{ $json.company_id }}&external_id=not.is.null&gtin=is.null&select=id,external_id,name&order=external_id.asc&limit={{ $json.max_por_execucao }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "bf004",
+      "name": "Supabase - Sem GTIN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [300, 0],
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "name": "farol_supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst startedAt = Date.now();\nconst maxN = Number(cfg.max_por_execucao ?? 120);\nconst items = $input.all().map((i) => i.json);\nlet list = [];\nif (items.length === 1 && Array.isArray(items[0])) list = items[0];\nelse if (items.length === 1 && Array.isArray(items[0]?.data)) list = items[0].data;\nelse list = items.filter((r) => r && r.id);\n\nconst fila = [];\nlet semExternal = 0;\nfor (const p of list) {\n  if (!p?.external_id) { semExternal += 1; continue; }\n  if (fila.length >= maxN) break;\n  fila.push({\n    product_uuid: p.id,\n    bling_id: String(p.external_id),\n    name: p.name ?? null,\n  });\n}\n\nreturn [{\n  json: {\n    ...cfg,\n    started_at: new Date(startedAt).toISOString(),\n    started_ms: startedAt,\n    skip: fila.length === 0,\n    motivo: fila.length === 0 ? 'nenhum_produto_sem_gtin' : null,\n    candidatos_lidos: list.length,\n    sem_external_id: semExternal,\n    fila_count: fila.length,\n    fila,\n  },\n}];"
+      },
+      "id": "bf005",
+      "name": "Montar fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bf006",
+      "name": "Tem fila?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [740, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Montar fila').first().json;\nconst cfg = $('Config').first().json;\nreturn (meta.fila || []).map((p) => ({\n  json: {\n    product_uuid: p.product_uuid,\n    bling_id: p.bling_id,\n    name: p.name,\n    bling_base_url: cfg.bling_base_url,\n    supabase_url: cfg.supabase_url,\n  },\n}));"
+      },
+      "id": "bf007",
+      "name": "Expand fila",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, -80]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.bling_base_url }}/produtos/{{ $json.bling_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": "={{ $('Config').first().json.bling_interval_ms }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "bf008",
+      "name": "BLING - Detalhe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1180, -80],
+      "credentials": {
+        "oAuth2Api": {
+          "name": "bling_vitor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst meta = $('Montar fila').first().json;\nconst expand = $('Expand fila').all();\nconst detalhes = $('BLING - Detalhe').all();\n\n/** Prioridade: gtin → gtinEmbalagem. Trim; ignora vazio / SEM GTIN. */\nfunction extractGtin(data) {\n  const candidates = [data?.gtin, data?.gtinEmbalagem, data?.tributacao?.gtin, data?.tributacao?.gtinEmbalagem];\n  for (const raw of candidates) {\n    if (raw === undefined || raw === null) continue;\n    const s = String(raw).trim();\n    if (!s) continue;\n    if (/^sem\\s*gtin$/i.test(s)) continue;\n    return s;\n  }\n  return null;\n}\n\nconst patches = [];\nlet analisados = 0;\nlet gtinEncontrados = 0;\nlet semGtin = 0;\nlet erros = 0;\nlet exemploGtin = null;\nlet exemploKeys = null;\n\nfor (let i = 0; i < detalhes.length; i++) {\n  const d = detalhes[i];\n  const item = expand[i]?.json;\n  if (!item?.product_uuid) continue;\n  analisados += 1;\n\n  const body = d.json;\n  if (body?.error || (body?.status && body.status >= 400)) {\n    erros += 1;\n    continue;\n  }\n  const data = body.data ?? body;\n  if (!data || typeof data !== 'object' || data.error) {\n    erros += 1;\n    continue;\n  }\n\n  if (!exemploKeys) {\n    exemploKeys = Object.keys(data).slice(0, 30).join(',');\n  }\n\n  const gtin = extractGtin(data);\n  if (!gtin) {\n    semGtin += 1;\n    continue;\n  }\n  gtinEncontrados += 1;\n  if (!exemploGtin) exemploGtin = gtin;\n  patches.push({\n    product_uuid: item.product_uuid,\n    bling_id: item.bling_id,\n    gtin,\n  });\n}\n\nreturn [{\n  json: {\n    supabase_url: cfg.supabase_url,\n    skip_patch: patches.length === 0,\n    patches,\n    analisados,\n    gtin_encontrados: gtinEncontrados,\n    sem_gtin: semGtin,\n    erros,\n    exemplo_gtin: exemploGtin,\n    exemplo_keys: exemploKeys,\n    fila_count: meta.fila_count ?? 0,\n    candidatos_lidos: meta.candidatos_lidos ?? 0,\n    started_ms: meta.started_ms,\n    started_at: meta.started_at,\n  },\n}];"
+      },
+      "id": "bf009",
+      "name": "Extrair GTIN",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1400, -80]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.skip_patch }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bf010",
+      "name": "Tem patch?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [1620, -80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const row = $('Extrair GTIN').first().json;\nconst cfg = $('Config').first().json;\nreturn (row.patches || []).map((p) => ({\n  json: {\n    url: cfg.supabase_url + '/rest/v1/products?id=eq.' + p.product_uuid,\n    body: { gtin: p.gtin },\n    product_uuid: p.product_uuid,\n    gtin: p.gtin,\n    skip_patch: false,\n  },\n}));"
+      },
+      "id": "bf011",
+      "name": "Expand patches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1840, -160]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.body }}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "bf012",
+      "name": "Supabase - Patch GTIN",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2060, -160],
+      "credentials": {
+        "supabaseApi": {
+          "name": "farol_supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const meta = $('Montar fila').first().json;\nconst startedMs = Number(meta.started_ms ?? Date.now());\nconst elapsedMs = Date.now() - startedMs;\n\nlet out = {\n  status: 'ok',\n  patch: '011.1',\n  workflow: 'backfill-gtin',\n  candidatos_lidos: meta.candidatos_lidos ?? 0,\n  fila_count: meta.fila_count ?? 0,\n  analisados: 0,\n  gtin_encontrados: 0,\n  gtin_gravados: 0,\n  sem_gtin: 0,\n  erros: 0,\n  patches_fail: 0,\n  exemplo_gtin: null,\n  exemplo_keys: null,\n  started_at: meta.started_at ?? null,\n  finished_at: new Date().toISOString(),\n  tempo_total_ms: elapsedMs,\n  tempo_total_s: Math.round(elapsedMs / 1000),\n  max_por_execucao: meta.max_por_execucao ?? null,\n  lote_size: meta.lote_size ?? null,\n  bling_interval_ms: meta.bling_interval_ms ?? null,\n};\n\nif (meta.skip) {\n  return [{ json: { ...out, motivo: meta.motivo || 'fila_vazia' } }];\n}\n\ntry {\n  const ex = $('Extrair GTIN').first().json;\n  out.analisados = ex.analisados ?? 0;\n  out.gtin_encontrados = ex.gtin_encontrados ?? 0;\n  out.sem_gtin = ex.sem_gtin ?? 0;\n  out.erros = ex.erros ?? 0;\n  out.exemplo_gtin = ex.exemplo_gtin ?? null;\n  out.exemplo_keys = ex.exemplo_keys ?? null;\n  out.gtin_gravados = ex.gtin_encontrados ?? 0;\n\n  if (ex.skip_patch) {\n    return [{ json: { ...out, motivo: 'detalhe_sem_gtin_ou_erros' } }];\n  }\n} catch (e) {}\n\ntry {\n  let ok = 0;\n  let fail = 0;\n  for (const it of $('Supabase - Patch GTIN').all()) {\n    const j = it.json;\n    const status = Number(j.statusCode ?? j.status ?? 0);\n    if (status >= 200 && status < 300) ok += 1;\n    else if (!status && !j.error) ok += 1;\n    else fail += 1;\n  }\n  out.gtin_gravados = ok;\n  out.patches_fail = fail;\n} catch (e) {}\n\nreturn [{ json: out }];"
+      },
+      "id": "bf013",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2280, 0]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {
+      "main": [[{ "node": "Config", "type": "main", "index": 0 }]]
+    },
+    "Config": {
+      "main": [[{ "node": "Supabase - Sem GTIN", "type": "main", "index": 0 }]]
+    },
+    "Supabase - Sem GTIN": {
+      "main": [[{ "node": "Montar fila", "type": "main", "index": 0 }]]
+    },
+    "Montar fila": {
+      "main": [[{ "node": "Tem fila?", "type": "main", "index": 0 }]]
+    },
+    "Tem fila?": {
+      "main": [
+        [{ "node": "Expand fila", "type": "main", "index": 0 }],
+        [{ "node": "Resultado", "type": "main", "index": 0 }]
+      ]
+    },
+    "Expand fila": {
+      "main": [[{ "node": "BLING - Detalhe", "type": "main", "index": 0 }]]
+    },
+    "BLING - Detalhe": {
+      "main": [[{ "node": "Extrair GTIN", "type": "main", "index": 0 }]]
+    },
+    "Extrair GTIN": {
+      "main": [[{ "node": "Tem patch?", "type": "main", "index": 0 }]]
+    },
+    "Tem patch?": {
+      "main": [
+        [{ "node": "Expand patches", "type": "main", "index": 0 }],
+        [{ "node": "Resultado", "type": "main", "index": 0 }]
+      ]
+    },
+    "Expand patches": {
+      "main": [[{ "node": "Supabase - Patch GTIN", "type": "main", "index": 0 }]]
+    },
+    "Supabase - Patch GTIN": {
+      "main": [[{ "node": "Resultado", "type": "main", "index": 0 }]]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [
+    {
+      "name": "farol"
+    },
+    {
+      "name": "temporario"
+    },
+    {
+      "name": "patch-011.1"
+    }
+  ],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-29T23:00:00.000Z",
+  "versionId": "patch-011.1-backfill-gtin"
+}
