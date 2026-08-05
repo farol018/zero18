@@ -1,7 +1,7 @@
 # FEATURE 012 — Importação automática de NFe de entrada (BLING → compras)
 
 **Data:** 2026-08-04  
-**Status:** rascunho de design — aguardando revisão do usuário  
+**Status:** implementada localmente (migrations + n8n + README) — aceite live pendente (SQL Editor + import n8n)  
 **Depende de:** FEATURE 009 (compras), FEATURE 011 (pipeline XML / match), PATCH 011.1 (document/gtin)
 
 ## Objetivo
@@ -21,10 +21,11 @@ XML manual da 011 permanece.
 | Janela sync | Rolante **14 dias** (MVP; sem checkpoint) |
 | Escopo documental | **Somente compras**. Devoluções / retornos **não** importam |
 | Onde roda a lógica | **Postgres** (RPC). n8n só busca BLING e chama a RPC |
+| Fornecedor ausente | **Auto-cria** `suppliers` pelo CNPJ da NFe (`fz_ensure_supplier`; `external_id=nfe-doc:{cnpj}`) |
 
 ## Fora de escopo
 
-- Criação automática de produtos ou fornecedores
+- Criação automática de **produtos**
 - Checkpoint / sync incremental por cursor (fica para evolução)
 - PDF, CSV, SEFAZ direto
 - Alterações no motor Farol, lista de compra, pedido, `composeLogistics`

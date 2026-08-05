@@ -35,6 +35,8 @@ export type MatchedPurchaseImport = {
   items: Array<{
     lineKey: string;
     productId: string | null;
+    productName: string | null;
+    productSku: string | null;
     productSupplierId: string | null;
     quantity: number;
     unitCost: number;
@@ -77,9 +79,13 @@ function findProduct(
       name: "gtin",
       candidates: () => {
         const gtin = normalizeCode(item.gtin);
-        return gtin
-          ? catalog.products.filter((product) => normalizeCode(product.gtin) === gtin)
-          : [];
+        if (!gtin || /^SEM\s*GTIN$/i.test(gtin)) return [];
+        return catalog.products.filter((product) => {
+          const productGtin = normalizeCode(product.gtin);
+          // Ignora marcador de backfill / ausência de EAN no BLING
+          if (!productGtin || /^SEM\s*GTIN$/i.test(productGtin)) return false;
+          return productGtin === gtin;
+        });
       },
     },
     {
@@ -154,6 +160,8 @@ export function matchPurchaseImport(
       return {
         lineKey: item.lineKey,
         productId: match?.product.id ?? null,
+        productName: match?.product.name ?? null,
+        productSku: match?.product.sku ?? null,
         productSupplierId: null,
         quantity: item.quantity,
         unitCost: item.unitCost,

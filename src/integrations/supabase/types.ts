@@ -782,6 +782,7 @@ export type Database = {
       purchase_items: {
         Row: {
           id: string
+          company_id: string
           purchase_id: string
           product_id: string
           product_supplier_id: string | null
@@ -792,22 +793,26 @@ export type Database = {
         }
         Insert: {
           id?: string
+          company_id: string
           purchase_id: string
           product_id: string
           product_supplier_id?: string | null
           quantity: number
           unit_cost: number
-          total_cost: number
+          /** Generated column in production — do not send on insert */
+          total_cost?: never
           created_at?: string
         }
         Update: {
           id?: string
+          company_id?: string
           purchase_id?: string
           product_id?: string
           product_supplier_id?: string | null
           quantity?: number
           unit_cost?: number
-          total_cost?: number
+          /** Generated column in production — do not send on update */
+          total_cost?: never
           created_at?: string
         }
         Relationships: [

@@ -44,6 +44,11 @@ Rodar no SQL Editor do projeto Supabase (ou via CLI), na ordem dos timestamps:
 | `20260729180000_sprint0_hardening_rls_indexes.sql` | **Sprint 0** — RLS company-scoped + índices |
 | `20260729190000_feature_010_product_logistics.sql` | FEATURE 010 — `product_logistics` |
 | `20260729200000_feature_011_purchase_xml_import.sql` | FEATURE 011 — importação XML NFe (`invoice_series`, `suppliers.document`, `products.gtin`) |
+| `20260804210000_inventory_movements_write_rls.sql` | FEATURE 012 — RLS write em `inventory_movements` (trigger de compra) |
+| `20260804220000_feature_012_align_purchase_items_schema.sql` | FEATURE 012 — `purchase_items.company_id` + `total_cost` generated |
+| `20260804221000_feature_012_import_purchase_nfe_rpc.sql` | FEATURE 012 — RPC `import_purchase_nfe` + helpers de match |
+| `20260804222000_feature_012_purchase_stock_trigger.sql` | FEATURE 012 — trigger `purchases.status` → estoque entrada/reversão |
+| `20260805120000_feature_012_ensure_supplier.sql` | FEATURE 012 — auto-cria fornecedor pelo CNPJ da NFe (`fz_ensure_supplier`) |
 
 Views Farol atuais = definição em **FEATURE 005**.
 
@@ -61,7 +66,7 @@ Login (Supabase Auth)
 - **Fornecedor:** dual-read `product_suppliers` (primary) ↔ `products.supplier_id`  
 - **Comercial:** `brands`, `categories`  
 - **Compras:** `purchases` + `purchase_items`  
-- **ERP:** BLING API v3 via n8n (`n8n/README-bling-sync.md`) — usar **service_role** nos workflows (bypassa RLS)
+- **ERP:** BLING API v3 via n8n (`n8n/README-bling-sync.md`) — workflows incl. `farol-bling-sync-compras.json` (012, NF-e entrada) e vendas; usar **service_role** (bypassa RLS)
 
 ### Stack UI ativa
 
@@ -73,7 +78,7 @@ Login (Supabase Auth)
 
 Janela de consumo e cobertura vêm de `companies.consumption_window_days` / `coverage_days` (não há seletor de período na UI — evita inconsistência com as views).
 
-## FEATURES 001–011 (resumo)
+## FEATURES 001–012 (resumo)
 
 1. **001** — Tabela `product_suppliers`  
 2. **002** — Backfill de vínculos  
@@ -86,6 +91,7 @@ Janela de consumo e cobertura vêm de `companies.consumption_window_days` / `cov
 9. **009** — Fundação módulo de compras  
 10. **010** — Logística inteligente (`product_logistics` + `composeLogistics`)  
 11. **011** — Registro de compras via XML NFe (`parseNFeXml` → matching → `PurchaseSheet` → `createDraft` com `source=xml`)
+12. **012** — Importação automática NFe entrada BLING → RPC `import_purchase_nfe` + estoque na confirmação (trigger em `purchases.status`; cancel reverte)
 
 **Sprint 0** — Hardening: RLS, auth, paginação lista, migration 009 segura, índices, remoção de código morto, docs.
 

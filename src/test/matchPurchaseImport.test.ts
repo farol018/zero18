@@ -53,6 +53,8 @@ describe("matchPurchaseImport", () => {
 
     expect(result.items[0]).toMatchObject({
       productId: "external",
+      productName: "Produto A",
+      productSku: "SKU-1",
       productSupplierId: null,
       matchCriteria: "external_id",
     });
@@ -100,6 +102,33 @@ describe("matchPurchaseImport", () => {
     expect(matchPurchaseImport(nameOnly, ambiguousCatalog).items[0]).toMatchObject({
       productId: null,
       matchCriteria: null,
+    });
+  });
+
+  it("ignores SEM GTIN marker on catalog products for gtin matching", () => {
+    const gtinOnly = {
+      ...model,
+      items: [{
+        ...model.items[0],
+        codeInternal: null,
+        gtin: "7899999999999",
+        supplierProductCode: null,
+        sku: null,
+        name: "Unknown",
+      }],
+    };
+    const markedCatalog: MatchCatalog = {
+      ...catalog,
+      products: [
+        { id: "marked", external_id: "x", gtin: "SEM GTIN", sku: null, name: "Sem EAN" },
+        { id: "real", external_id: "y", gtin: "7899999999999", sku: null, name: "Com EAN" },
+      ],
+      productSuppliers: [],
+    };
+
+    expect(matchPurchaseImport(gtinOnly, markedCatalog).items[0]).toMatchObject({
+      productId: "real",
+      matchCriteria: "gtin",
     });
   });
 });

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useCompany } from "@/contexts/CompanyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { findExistingPurchaseByNFeKey } from "@/lib/purchaseImport/checkDuplicateNFe";
+import { fetchMatchCatalogForImport } from "@/lib/purchaseImport/fetchMatchCatalog";
 import {
   matchPurchaseImport,
   type MatchedPurchaseImport,
@@ -61,31 +62,8 @@ export function RegisterPurchaseDialog({
         return;
       }
 
-      const [suppliersResult, productsResult, productSuppliersResult] = await Promise.all([
-        supabase
-          .from("suppliers")
-          .select("id, document, name")
-          .eq("company_id", companyId),
-        supabase
-          .from("products")
-          .select("id, external_id, gtin, sku, name")
-          .eq("company_id", companyId),
-        supabase
-          .from("product_suppliers")
-          .select("product_id, supplier_id, supplier_sku")
-          .eq("company_id", companyId),
-      ]);
-      if (suppliersResult.error) throw suppliersResult.error;
-      if (productsResult.error) throw productsResult.error;
-      if (productSuppliersResult.error) throw productSuppliersResult.error;
-
-      onXmlReady(
-        matchPurchaseImport(model, {
-          suppliers: suppliersResult.data ?? [],
-          products: productsResult.data ?? [],
-          productSuppliers: productSuppliersResult.data ?? [],
-        }),
-      );
+      const catalog = await fetchMatchCatalogForImport(supabase, companyId, model);
+      onXmlReady(matchPurchaseImport(model, catalog));
       onOpenChange(false);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível importar o XML.");

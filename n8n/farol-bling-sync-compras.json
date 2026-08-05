@@ -1,0 +1,750 @@
+{
+  "name": "FAROL — BLING Sync Compras",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## FAROL — Sync Compras (FEATURE 012)\n\n- `dias_janela = 14` (NF-e entrada)\n- `nfe_tipo = 0` (entrada)\n- `modo_teste = 0`\n- Intervalo BLING **4s**\n- Max **400** detalhes / **20** páginas lista\n\nMatch e estoque ficam no RPC `import_purchase_nfe`.",
+        "height": 240,
+        "width": 460
+      },
+      "id": "c001",
+      "name": "Notas",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        -100
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "c002",
+      "name": "Executar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -140,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "c002b",
+      "name": "Agendamento 4h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -140,
+        -140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "company_id",
+              "value": "04c9b2c3-1c6e-439b-949a-486e4917b13c",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "supabase_url",
+              "value": "https://ilrebasidmyltziuibyc.supabase.co",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "bling_base_url",
+              "value": "https://www.bling.com.br/Api/v3",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "dias_janela",
+              "value": 14,
+              "type": "number"
+            },
+            {
+              "id": "a5",
+              "name": "compras_max_paginas",
+              "value": 20,
+              "type": "number"
+            },
+            {
+              "id": "a6",
+              "name": "nfe_series",
+              "value": "",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "nfe_tipo",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "a8",
+              "name": "nfe_max_detalhe",
+              "value": 400,
+              "type": "number"
+            },
+            {
+              "id": "a9",
+              "name": "bling_interval_ms",
+              "value": 4000,
+              "type": "number"
+            },
+            {
+              "id": "a10",
+              "name": "modo_teste",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "a11",
+              "name": "nfe_limite",
+              "value": 50,
+              "type": "number"
+            },
+            {
+              "id": "a12",
+              "name": "bling_interval_ms_teste",
+              "value": 3500,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c003",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Config').first().json;\nconst d = new Date();\nconst fim = d.toISOString().slice(0, 10);\nconst ini = new Date(d.getTime() - Number(cfg.dias_janela ?? 14) * 86400000).toISOString().slice(0, 10);\nconst modoTeste = Boolean(Number(cfg.modo_teste));\nconst nfeLimite = Number(cfg.nfe_limite ?? 50);\nreturn [{\n  json: {\n    ...cfg,\n    dataInicial: ini,\n    dataFinal: fim,\n    dataEmissaoInicial: `${ini} 00:00:00`,\n    dataEmissaoFinal: `${fim} 23:59:59`,\n    continuar: true,\n    modo_teste: modoTeste,\n    nfe_limite: modoTeste ? nfeLimite : 0,\n    compras_max_paginas: modoTeste ? 1 : Number(cfg.compras_max_paginas ?? 20),\n    nfe_max_detalhe: modoTeste ? nfeLimite : Number(cfg.nfe_max_detalhe ?? 400),\n    bling_interval_ms: modoTeste\n      ? Number(cfg.bling_interval_ms_teste ?? 3500)\n      : Number(cfg.bling_interval_ms ?? 4000),\n  },\n}];"
+      },
+      "id": "c003b",
+      "name": "Continuar sync",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst maxPag = Number(cfg.compras_max_paginas ?? 20);\nconst pages = [];\n\nfunction buildQuery(parts) {\n  return parts\n    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)\n    .join('&');\n}\n\nfor (let p = 1; p <= maxPag; p++) {\n  const queryParts = [['pagina', p], ['limite', '100']];\n  if (!cfg.modo_teste) {\n    queryParts.push(['tipo', String(cfg.nfe_tipo ?? 0)]);\n    if (cfg.dataEmissaoInicial) queryParts.push(['dataEmissaoInicial', cfg.dataEmissaoInicial]);\n    if (cfg.dataEmissaoFinal) queryParts.push(['dataEmissaoFinal', cfg.dataEmissaoFinal]);\n  }\n  pages.push({\n    json: {\n      page: p,\n      bling_base_url: cfg.bling_base_url,\n      nfe_url: `${cfg.bling_base_url}/nfe?${buildQuery(queryParts)}`,\n      dataEmissaoInicial: cfg.dataEmissaoInicial,\n      dataEmissaoFinal: cfg.dataEmissaoFinal,\n    },\n  });\n}\nreturn pages;"
+      },
+      "id": "c005",
+      "name": "Paginas NFe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.nfe_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "sendQuery": false,
+        "queryParameters": {
+          "parameters": []
+        },
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": "={{ $('Continuar sync').first().json.bling_interval_ms }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c006",
+      "name": "BLING - Listar NFe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        740,
+        0
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "name": "bling_vitor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst allowed = new Set(String(cfg.nfe_series ?? '').split(',').map((s) => s.trim()).filter(Boolean));\nconst maxDetalhe = Number(cfg.nfe_max_detalhe ?? 400);\nconst capNotas = Number(cfg.nfe_limite ?? 0) > 0 ? Number(cfg.nfe_limite) : Infinity;\nlet notasVistas = 0;\nconst comItens = [];\nconst precisaDetalhe = [];\nlet ignoradasSerie = 0;\nlet semSerieFilaDetalhe = 0;\nlet capDetalheIgnoradas = 0;\nlet nfesListaTotal = 0;\nlet errosLista = 0;\nlet paginasComDados = 0;\nlet erroListaAmostra = null;\nlet ignoradasTipo = 0;\nlet ignoradasPeriodo = 0;\nconst tipoCfg = Number(cfg.nfe_tipo ?? 0);\nconst iniPeriodo = new Date(String(cfg.dataInicial ?? cfg.dataEmissaoInicial ?? '').slice(0, 10)).getTime();\nconst fimPeriodo = new Date(String(cfg.dataFinal ?? cfg.dataEmissaoFinal ?? '').slice(0, 10)).getTime();\n\nfunction captureListaErr(item) {\n  const e = item.json.error;\n  if (e) {\n    if (typeof e === 'string') return e;\n    return e.message ?? e.description ?? e.type ?? JSON.stringify(e);\n  }\n  return JSON.stringify(item.json).slice(0, 400);\n}\n\nfunction isEntrada(n) {\n  const t = Number(n.tipo ?? n.tipoNF ?? n.tipoNota ?? 0);\n  return t === tipoCfg;\n}\n\nfunction inPeriodo(n) {\n  if (!cfg.modo_teste) return true;\n  if (Number.isNaN(iniPeriodo) || Number.isNaN(fimPeriodo)) return true;\n  const raw = n.dataEmissao ?? n.data ?? n.dataEntrada;\n  if (!raw) return true;\n  const ms = new Date(String(raw).slice(0, 10)).getTime();\n  if (Number.isNaN(ms)) return true;\n  return ms >= iniPeriodo && ms <= fimPeriodo + 86400000;\n}\n\nfunction getSerie(n) {\n  return String(n.serie ?? n.numeroSerie ?? n.serieNota ?? '').trim();\n}\n\nfunction hasItens(n) {\n  const itens = n.itens ?? n.itensNF ?? n.itensNota ?? [];\n  return Array.isArray(itens) && itens.length > 0;\n}\n\nfor (const item of $input.all()) {\n  if (item.json.error) {\n    errosLista += 1;\n    if (!erroListaAmostra) erroListaAmostra = captureListaErr(item);\n    continue;\n  }\n  const batch = item.json.data ?? [];\n  if (!Array.isArray(batch)) continue;\n  if (batch.length > 0) paginasComDados += 1;\n  for (const n of batch) {\n    if (notasVistas >= capNotas) break;\n    if (!n?.id) continue;\n    notasVistas += 1;\n    nfesListaTotal += 1;\n\n    if (!isEntrada(n)) {\n      ignoradasTipo += 1;\n      continue;\n    }\n    if (!inPeriodo(n)) {\n      ignoradasPeriodo += 1;\n      continue;\n    }\n\n    const serie = getSerie(n);\n\n    if (allowed.size > 0 && serie && !allowed.has(serie)) {\n      ignoradasSerie += 1;\n      continue;\n    }\n\n    if (hasItens(n)) {\n      comItens.push({ json: { fromList: true, nfeData: n } });\n      continue;\n    }\n\n    if (precisaDetalhe.length < maxDetalhe) {\n      if (!serie) semSerieFilaDetalhe += 1;\n      precisaDetalhe.push({ json: { fromList: false, nfeId: String(n.id), serie: serie || null, bling_base_url: cfg.bling_base_url } });\n    } else {\n      capDetalheIgnoradas += 1;\n    }\n  }\n  if (notasVistas >= capNotas) break;\n}\n\nconst stats = {\n  modo_teste: Boolean(cfg.modo_teste),\n  nfe_limite: capNotas === Infinity ? 0 : capNotas,\n  nfes_lista_total: nfesListaTotal,\n  paginas_com_dados: paginasComDados,\n  erros_lista: errosLista,\n  erro_lista_amostra: erroListaAmostra,\n  ignoradas_tipo: ignoradasTipo,\n  ignoradas_periodo: ignoradasPeriodo,\n  com_itens: comItens.length,\n  precisa_detalhe: precisaDetalhe.length,\n  ignoradas_serie: ignoradasSerie,\n  sem_serie_fila_detalhe: semSerieFilaDetalhe,\n  cap_detalhe_ignoradas: capDetalheIgnoradas,\n  data_inicial: cfg.dataInicial ?? cfg.dataEmissaoInicial,\n  data_final: cfg.dataFinal ?? cfg.dataEmissaoFinal,\n};\n\nconst out = [...comItens, ...precisaDetalhe];\nif (out.length === 0) {\n  return [{ json: { fromList: true, nfeData: null, stats } }];\n}\n\nreturn out.map((row, idx) => ({\n  json: {\n    ...row.json,\n    stats: idx === 0 ? stats : undefined,\n  },\n}));\n"
+      },
+      "id": "c007",
+      "name": "IDs notas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().filter((item) => item.json.fromList === false && item.json.nfeId);\nif (rows.length === 0) {\n  return [{ json: { skip_detalhe: true } }];\n}\nreturn rows;"
+      },
+      "id": "c007b",
+      "name": "Fila detalhe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.skip_detalhe }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c007c",
+      "name": "Tem detalhe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.bling_base_url }}/nfe/{{ $json.nfeId }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "oAuth2Api",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": "={{ $('Continuar sync').first().json.bling_interval_ms }}"
+            }
+          },
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c008",
+      "name": "BLING - Detalhe NFe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1620,
+        -80
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "oAuth2Api": {
+          "name": "bling_vitor"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $('Continuar sync').first().json;\nconst COMPANY_ID = cfg.company_id;\nconst allowedSeries = new Set(String(cfg.nfe_series ?? '').split(',').map((s) => s.trim()).filter(Boolean));\nconst stats = ($('IDs notas').first().json.stats ?? {});\n\nconst rpcRows = [];\nlet errosApi = 0;\nlet notasIgnoradasSerie = 0;\nlet notasProcessadas = 0;\nlet notasSemItens = 0;\nlet notasSemChave = 0;\nlet skippedReturnLocal = 0;\nlet linhasNfe = 0;\nlet exemploLinha = null;\nlet exemploSupplier = null;\nlet payloadsSemCnpj = 0;\nlet payloadsComCnpjContato = 0;\nlet payloadsComCnpjChave = 0;\n\nfunction resolveNfe(raw) {\n  const nfe = raw?.data ?? raw;\n  if (nfe?.data?.id) return nfe.data;\n  return nfe;\n}\n\nfunction getItens(nfe) {\n  const lists = [nfe.itens, nfe.itensNF, nfe.itensNota, nfe.notaFiscal?.itens, nfe.items];\n  for (const c of lists) {\n    if (Array.isArray(c) && c.length) return c;\n  }\n  return [];\n}\n\nfunction getQty(linha) {\n  return Math.abs(Number(\n    linha.quantidade ?? linha.qtd ?? linha.qtde ?? linha.quantidadeComercial ?? linha.qCom ?? 0\n  ));\n}\n\nfunction getUnitCost(linha) {\n  return Number(\n    linha.valorUnitario ?? linha.valor ?? linha.vUnCom ?? linha.preco ?? 0\n  );\n}\n\nfunction digits(v) {\n  return String(v ?? '').replace(/\\D/g, '') || null;\n}\n\nfunction cnpjFromChave(chave) {\n  const c = digits(chave);\n  if (!c || c.length !== 44) return null;\n  // Chave NFe: posições 7-20 (1-based) = CNPJ do emitente\n  return c.slice(6, 20);\n}\n\nfunction getSupplier(nfe, chave) {\n  const emit = nfe.contato ?? nfe.emitente ?? nfe.fornecedor ?? nfe.fornecedorNota ?? {};\n  const nested = emit.contato ?? {};\n  const fromContato = digits(\n    emit.numeroDocumento ?? emit.cnpj ?? emit.cpfCnpj ?? emit.documento ??\n    nested.numeroDocumento ?? nested.cnpj ?? nested.cpfCnpj ?? nested.documento ??\n    nfe.numeroDocumentoEmitente ?? nfe.cnpjEmitente\n  );\n  const doc = fromContato || cnpjFromChave(chave);\n  const name = emit.nome ?? emit.razaoSocial ?? emit.xNome ?? nested.nome ?? nested.razaoSocial ?? null;\n  return {\n    document: doc,\n    name,\n    document_source: doc ? (fromContato ? 'contato' : 'chave') : null,\n  };\n}\n\nfunction isReturnPayload(payload) {\n  const nat = String(payload.natureza ?? '').toLowerCase();\n  if (nat.includes('devolu') || nat.includes('retorno')) return true;\n  const cfops = String(payload.cfops ?? '').toLowerCase();\n  if (/\\b(1201|1202|2201|2202|1410|2410)\\b/.test(cfops)) return true;\n  return false;\n}\n\nfunction buildPayload(nfeData) {\n  const chave = String(nfeData.chaveAcesso ?? nfeData.chave ?? '').replace(/\\D/g, '');\n  const rawItens = getItens(nfeData);\n  const items = rawItens.map((it, idx) => {\n    linhasNfe += 1;\n    if (!exemploLinha) exemploLinha = JSON.stringify(it).slice(0, 320);\n    const codigo = it.codigo ?? it.codigoProduto?.codigo ?? it.produto?.codigo ?? null;\n    return {\n      line_key: String(it.numeroItem ?? it.nItem ?? idx + 1),\n      gtin: it.gtin || it.codigoBarras || it.codigoDeBarras || it.cEAN || null,\n      supplier_product_code: codigo,\n      sku: codigo,\n      name: it.descricao || it.nome || it.xProd || null,\n      quantity: getQty(it),\n      unit_cost: getUnitCost(it),\n    };\n  });\n  const cfops = [...new Set(rawItens.map((it) => it.cfop ?? it.CFOP).filter(Boolean))].join(',');\n  const supplier = getSupplier(nfeData, chave);\n  return {\n    external_id: chave,\n    invoice_number: String(nfeData.numero ?? ''),\n    invoice_series: String(nfeData.serie ?? nfeData.numeroSerie ?? ''),\n    issued_at: String(nfeData.dataEmissao ?? nfeData.data ?? nfeData.dataEntrada ?? '').slice(0, 10),\n    natureza: nfeData.naturezaOperacao || nfeData.natureza || '',\n    cfops,\n    supplier,\n    items,\n  };\n}\n\nfunction processNfe(rawNfe) {\n  const nfeData = resolveNfe(rawNfe);\n  if (!nfeData?.id) return;\n  const serie = String(nfeData.serie ?? nfeData.numeroSerie ?? nfeData.serieNota ?? '').trim();\n  if (allowedSeries.size > 0 && serie && !allowedSeries.has(serie)) {\n    notasIgnoradasSerie += 1;\n    return;\n  }\n  const itens = getItens(nfeData);\n  if (!itens.length) {\n    notasSemItens += 1;\n    return;\n  }\n  const payload = buildPayload(nfeData);\n  if (!payload.external_id || payload.external_id.length !== 44) {\n    notasSemChave += 1;\n    return;\n  }\n  if (isReturnPayload(payload)) {\n    skippedReturnLocal += 1;\n    return;\n  }\n  if (!payload.supplier?.document) payloadsSemCnpj += 1;\n  else if (payload.supplier.document_source === 'chave') payloadsComCnpjChave += 1;\n  else payloadsComCnpjContato += 1;\n  if (!exemploSupplier) {\n    exemploSupplier = JSON.stringify({\n      document: payload.supplier?.document ?? null,\n      name: payload.supplier?.name ?? null,\n      document_source: payload.supplier?.document_source ?? null,\n      invoice_number: payload.invoice_number,\n    }).slice(0, 320);\n  }\n  // RPC só precisa de document/name\n  const rpcSupplier = {\n    document: payload.supplier?.document ?? null,\n    name: payload.supplier?.name ?? null,\n  };\n  notasProcessadas += 1;\n  rpcRows.push({\n    json: {\n      company_id: COMPANY_ID,\n      payload: { ...payload, supplier: rpcSupplier },\n      supabase_url: cfg.supabase_url,\n      nfe_id: String(nfeData.id),\n      chave: payload.external_id,\n    },\n  });\n}\n\nfor (const item of $('IDs notas').all()) {\n  if (item.json.fromList === true && item.json.nfeData) {\n    processNfe(item.json.nfeData);\n  }\n}\n\nlet detalhes = [];\ntry {\n  detalhes = $('BLING - Detalhe NFe').all();\n} catch (e) {\n  detalhes = [];\n}\n\nfor (const item of detalhes) {\n  if (item.json.error) {\n    errosApi += 1;\n    continue;\n  }\n  processNfe(item.json);\n}\n\nconst meta = {\n  notas_processadas: notasProcessadas,\n  notas_sem_itens: notasSemItens,\n  notas_sem_chave: notasSemChave,\n  skipped_return_local: skippedReturnLocal,\n  linhas_nfe: linhasNfe,\n  exemplo_linha_nfe: exemploLinha,\n  exemplo_supplier: exemploSupplier,\n  payloads_sem_cnpj: payloadsSemCnpj,\n  payloads_cnpj_contato: payloadsComCnpjContato,\n  payloads_cnpj_chave: payloadsComCnpjChave,\n  notas_lista_com_itens: stats.com_itens ?? 0,\n  notas_detalhe_bling: stats.precisa_detalhe ?? 0,\n  notas_ignoradas_serie: (stats.ignoradas_serie ?? 0) + notasIgnoradasSerie,\n  notas_sem_serie_lista: stats.sem_serie_fila_detalhe ?? 0,\n  nfes_lista_total: stats.nfes_lista_total ?? 0,\n  paginas_com_dados: stats.paginas_com_dados ?? 0,\n  erros_lista: stats.erros_lista ?? 0,\n  erro_lista_amostra: stats.erro_lista_amostra ?? null,\n  cap_detalhe_ignoradas: stats.cap_detalhe_ignoradas ?? 0,\n  data_inicial: stats.data_inicial ?? cfg.dataInicial ?? null,\n  data_final: stats.data_final ?? cfg.dataFinal ?? null,\n  modo_teste: stats.modo_teste ?? false,\n  nfe_limite: stats.nfe_limite ?? 0,\n  erros_api: errosApi,\n  supabase_url: cfg.supabase_url,\n  skip_post: rpcRows.length === 0,\n  rpc_total: rpcRows.length,\n};\n\nif (rpcRows.length === 0) {\n  return [{ json: { ...meta } }];\n}\n\nreturn rpcRows.map((row, idx) => ({\n  json: {\n    ...row.json,\n    ...(idx === 0 ? meta : {}),\n  },\n}));\n"
+      },
+      "id": "c009",
+      "name": "Montar payloads RPC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.skip_post }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c009b",
+      "name": "Tem payloads?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2060,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.supabase_url }}/rest/v1/rpc/import_purchase_nfe",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { p_company_id: $json.company_id, p_payload: $json.payload } }}",
+        "options": {
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 200
+            }
+          },
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "c010",
+      "name": "Supabase - RPC import_purchase_nfe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2280,
+        -80
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "name": "farol_supabase"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const montar = $('Montar payloads RPC').first().json;\nlet posts = [];\nif (!montar.skip_post) {\n  try {\n    posts = $('Supabase - RPC import_purchase_nfe').all();\n  } catch (e) {\n    posts = [];\n  }\n}\n\nlet confirmed = 0;\nlet draft = 0;\nlet skipped_duplicate = 0;\nlet rejected_return = Number(montar.skipped_return_local ?? 0);\nlet error = Number(montar.notas_sem_chave ?? 0);\nlet postsOk = 0;\nlet postsFail = 0;\nconst erros = [];\n\nfunction formatErr(body) {\n  if (!body) return 'sem body';\n  if (typeof body === 'string') return body;\n  if (body.message) return body.message;\n  if (body.error) return body.error;\n  if (body.code && body.details) return `${body.code}: ${body.details}`;\n  return JSON.stringify(body);\n}\n\nfunction parseRpcResult(item) {\n  const j = item.json;\n  let body = j.body ?? j;\n  if (typeof body === 'string') {\n    try { body = JSON.parse(body); } catch (e) {}\n  }\n  if (Array.isArray(body) && body.length === 1) body = body[0];\n  return {\n    statusCode: Number(j.statusCode ?? j.status ?? 0),\n    result: body,\n    chave: item.json.chave ?? null,\n  };\n}\n\nif (!montar.skip_post) {\n  for (const item of posts) {\n    const { statusCode, result } = parseRpcResult(item);\n    if (statusCode >= 200 && statusCode < 300) {\n      postsOk += 1;\n      const st = result?.status ?? 'error';\n      switch (st) {\n        case 'confirmed': confirmed += 1; break;\n        case 'draft': draft += 1; break;\n        case 'skipped_duplicate': skipped_duplicate += 1; break;\n        case 'rejected_return': rejected_return += 1; break;\n        default:\n          error += 1;\n          erros.push(formatErr(result).slice(0, 400));\n      }\n      continue;\n    }\n    postsFail += 1;\n    error += 1;\n    erros.push(`${statusCode}: ${formatErr(result).slice(0, 400)}`);\n  }\n}\n\nreturn [{\n  json: {\n    confirmed,\n    draft,\n    skipped_duplicate,\n    rejected_return,\n    error,\n    rpc_total: montar.rpc_total ?? 0,\n    notas_processadas: montar.notas_processadas ?? 0,\n    notas_sem_itens: montar.notas_sem_itens ?? 0,\n    notas_sem_chave: montar.notas_sem_chave ?? 0,\n    skipped_return_local: montar.skipped_return_local ?? 0,\n    linhas_nfe: montar.linhas_nfe ?? 0,\n    exemplo_linha_nfe: montar.exemplo_linha_nfe ?? null,\n    notas_lista_com_itens: montar.notas_lista_com_itens ?? 0,\n    notas_detalhe_bling: montar.notas_detalhe_bling ?? 0,\n    notas_ignoradas_serie: montar.notas_ignoradas_serie ?? 0,\n    notas_sem_serie_fila_detalhe: montar.notas_sem_serie_lista ?? 0,\n    nfes_lista_total: montar.nfes_lista_total ?? 0,\n    paginas_com_dados: montar.paginas_com_dados ?? 0,\n    erros_lista: montar.erros_lista ?? 0,\n    cap_detalhe_ignoradas: montar.cap_detalhe_ignoradas ?? 0,\n    data_inicial: montar.data_inicial ?? null,\n    data_final: montar.data_final ?? null,\n    modo_teste: montar.modo_teste ?? false,\n    nfe_limite: montar.nfe_limite ?? 0,\n    erro_lista_amostra: montar.erro_lista_amostra ?? null,\n    erros_api: montar.erros_api ?? 0,\n    posts_ok: postsOk,\n    posts_fail: postsFail,\n    erro_rpc_amostra: montar.skip_post ? 'nenhuma NF-e para importar' : (erros.slice(0, 3).join(' | ') || null),\n  },\n}];"
+      },
+      "id": "c010b",
+      "name": "Consolidar resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "r1",
+              "name": "confirmed",
+              "value": "={{ $json.confirmed }}",
+              "type": "number"
+            },
+            {
+              "id": "r2",
+              "name": "draft",
+              "value": "={{ $json.draft }}",
+              "type": "number"
+            },
+            {
+              "id": "r3",
+              "name": "skipped_duplicate",
+              "value": "={{ $json.skipped_duplicate }}",
+              "type": "number"
+            },
+            {
+              "id": "r4",
+              "name": "rejected_return",
+              "value": "={{ $json.rejected_return }}",
+              "type": "number"
+            },
+            {
+              "id": "r5",
+              "name": "error",
+              "value": "={{ $json.error }}",
+              "type": "number"
+            },
+            {
+              "id": "r6",
+              "name": "rpc_total",
+              "value": "={{ $json.rpc_total }}",
+              "type": "number"
+            },
+            {
+              "id": "r7",
+              "name": "notas_processadas",
+              "value": "={{ $json.notas_processadas }}",
+              "type": "number"
+            },
+            {
+              "id": "r8",
+              "name": "posts_ok",
+              "value": "={{ $json.posts_ok }}",
+              "type": "number"
+            },
+            {
+              "id": "r9",
+              "name": "posts_fail",
+              "value": "={{ $json.posts_fail }}",
+              "type": "number"
+            },
+            {
+              "id": "r10",
+              "name": "erro_rpc_amostra",
+              "value": "={{ $json.erro_rpc_amostra }}",
+              "type": "string"
+            },
+            {
+              "id": "r11",
+              "name": "nfes_lista_total",
+              "value": "={{ $json.nfes_lista_total }}",
+              "type": "number"
+            },
+            {
+              "id": "r12",
+              "name": "notas_lista_com_itens",
+              "value": "={{ $json.notas_lista_com_itens }}",
+              "type": "number"
+            },
+            {
+              "id": "r13",
+              "name": "notas_detalhe_bling",
+              "value": "={{ $json.notas_detalhe_bling }}",
+              "type": "number"
+            },
+            {
+              "id": "r14",
+              "name": "skipped_return_local",
+              "value": "={{ $json.skipped_return_local }}",
+              "type": "number"
+            },
+            {
+              "id": "r15",
+              "name": "notas_sem_chave",
+              "value": "={{ $json.notas_sem_chave }}",
+              "type": "number"
+            },
+            {
+              "id": "r16",
+              "name": "data_inicial",
+              "value": "={{ $json.data_inicial }}",
+              "type": "string"
+            },
+            {
+              "id": "r17",
+              "name": "data_final",
+              "value": "={{ $json.data_final }}",
+              "type": "string"
+            },
+            {
+              "id": "r18",
+              "name": "modo_teste",
+              "value": "={{ $json.modo_teste }}",
+              "type": "boolean"
+            },
+            {
+              "id": "r19",
+              "name": "nfe_limite",
+              "value": "={{ $json.nfe_limite }}",
+              "type": "number"
+            },
+            {
+              "id": "r20",
+              "name": "erro_lista_amostra",
+              "value": "={{ $json.erro_lista_amostra }}",
+              "type": "string"
+            },
+            {
+              "id": "r21",
+              "name": "exemplo_linha_nfe",
+              "value": "={{ $json.exemplo_linha_nfe }}",
+              "type": "string"
+            },
+            {
+              "id": "diag-exemplo_supplier",
+              "name": "exemplo_supplier",
+              "value": "={{ $json.exemplo_supplier }}",
+              "type": "string"
+            },
+            {
+              "id": "diag-payloads_sem_cnpj",
+              "name": "payloads_sem_cnpj",
+              "value": "={{ $json.payloads_sem_cnpj }}",
+              "type": "number"
+            },
+            {
+              "id": "diag-payloads_cnpj_contato",
+              "name": "payloads_cnpj_contato",
+              "value": "={{ $json.payloads_cnpj_contato }}",
+              "type": "number"
+            },
+            {
+              "id": "diag-payloads_cnpj_chave",
+              "name": "payloads_cnpj_chave",
+              "value": "={{ $json.payloads_cnpj_chave }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c011",
+      "name": "Resultado",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2720,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Executar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agendamento 4h": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Continuar sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continuar sync": {
+      "main": [
+        [
+          {
+            "node": "Paginas NFe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Paginas NFe": {
+      "main": [
+        [
+          {
+            "node": "BLING - Listar NFe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLING - Listar NFe": {
+      "main": [
+        [
+          {
+            "node": "IDs notas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IDs notas": {
+      "main": [
+        [
+          {
+            "node": "Fila detalhe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fila detalhe": {
+      "main": [
+        [
+          {
+            "node": "Tem detalhe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem detalhe?": {
+      "main": [
+        [
+          {
+            "node": "BLING - Detalhe NFe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Montar payloads RPC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "BLING - Detalhe NFe": {
+      "main": [
+        [
+          {
+            "node": "Montar payloads RPC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar payloads RPC": {
+      "main": [
+        [
+          {
+            "node": "Tem payloads?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tem payloads?": {
+      "main": [
+        [
+          {
+            "node": "Supabase - RPC import_purchase_nfe",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consolidar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase - RPC import_purchase_nfe": {
+      "main": [
+        [
+          {
+            "node": "Consolidar resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consolidar resultado": {
+      "main": [
+        [
+          {
+            "node": "Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timeout": 21600
+  },
+  "pinData": {}
+}

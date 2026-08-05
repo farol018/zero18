@@ -17,7 +17,7 @@ Integração do [BLING API v3](https://developer.bling.com.br/bling-api) com o F
 2. Credenciais no n8n (já configuradas por você):
    - **BLING** — OAuth2 API v3 (`oAuth2Api`)
    - **Supabase** — service role (`supabaseApi`), ex.: `farol_supabase`
-3. Importar os 3 workflows JSON desta pasta.
+3. Importar os workflows JSON desta pasta (produtos, estoque, vendas, compras, etc.).
 
 ## Workflows
 
@@ -28,6 +28,7 @@ Integração do [BLING API v3](https://developer.bling.com.br/bling-api) com o F
 | `farol-bling-backfill-gtin.json` (**temporário**) | Catálogo `gtin IS NULL` → `GET /produtos/{id}` → PATCH `gtin` | manual, até zerar backlog |
 | `farol-bling-sync-estoque.json` | Saldo atual → `current_stock` | a cada 4h |
 | `farol-bling-sync-vendas.json` | NF-e saída séries 1 e 4 → `inventory_movements` (14 dias) | a cada 4h / 1h30 |
+| `farol-bling-sync-compras.json` (FEATURE 012) | NF-e entrada (`tipo=0`) → RPC `import_purchase_nfe` (14 dias) | a cada 4h |
 
 ## Mapeamento BLING → Supabase
 
@@ -86,7 +87,34 @@ O workflow v12 evita timeout (~1h09 da instância n8n):
 
 Filtros: `tipo = 1` (saída), `nfe_series = 1,4`, `dias_atras = 14`.
 
-Após importar, rode no Supabase (janela de consumo do Farol):
+### Compras (`GET /nfe` tipo entrada, FEATURE 012)
+
+O workflow `farol-bling-sync-compras.json` importa **NF-e de entrada** (compras) do BLING para a aba Compras do Farol via RPC Postgres — **sem match de produto/fornecedor no n8n**.
+
+| Campo Config | Valor | Uso |
+|--------------|-------|-----|
+| `nfe_tipo` | `0` | 0 = entrada (compra) |
+| `nfe_series` | *(vazio)* | Aceita qualquer série do fornecedor |
+| `dias_janela` | `14` | Janela rolante de emissão |
+| `nfe_max_detalhe` | `400` | Máx. detalhes `GET /nfe/{id}` por execução |
+| `modo_teste` | `0` | `1` limita a `nfe_limite` notas (dry-run parcial) |
+
+Fluxo:
+
+1. Lista BLING `GET /nfe?tipo=0` com paginação (até 20 páginas) e janela de 14 dias.
+2. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING 4s.
+3. Code **Montar payloads RPC** mapeia chave NFe, fornecedor (`contato`/`emitente`), itens (`gtin`, `codigo`, `quantidade`, `valorUnitario`) — **CFOP por item** (`it.cfop`) agregado em `cfops`.
+4. Devoluções/retornos: soft-skip no n8n (natureza ou CFOP 1201/1202/2201/2202/1410/2410); o RPC `fz_is_purchase_return` também rejeita se passar.
+5. `POST /rest/v1/rpc/import_purchase_nfe` com credencial `farol_supabase` (service_role).
+6. Nó **Resultado** agrega: `confirmed`, `draft`, `skipped_duplicate`, `rejected_return`, `error`.
+
+Match 100% → `confirmed` + estoque (trigger); incompleto → `draft`; duplicata → `skipped_duplicate`.
+
+**Pré-requisito:** migrations FEATURE 012 aplicadas no Supabase (`import_purchase_nfe` + trigger estoque).
+
+Após importar no n8n, ligue `bling_vitor` + `farol_supabase` nos nós HTTP e rode manualmente com `modo_teste=1` antes de ativar o agendamento 4h.
+
+Após importar vendas, rode no Supabase (janela de consumo do Farol):
 
 ```sql
 UPDATE companies
@@ -124,7 +152,7 @@ No workflow **FAROL — BLING Sync Produtos**, repita em **Sync fornecedores** e
    - **Supabase API** → `farol_supabase`
 4. **Save** no workflow
 
-Mesma coisa nos workflows de **Estoque** e **Vendas** (nó **Sync estoque** / **Sync vendas**).
+Mesma coisa nos workflows de **Estoque**, **Vendas** e **Compras** (nós HTTP BLING + Supabase).
 
 ### C) Testar
 
@@ -146,6 +174,7 @@ Mesma coisa nos workflows de **Estoque** e **Vendas** (nó **Sync estoque** / **
 1. **Produtos** — cria `suppliers` + `products`
 2. **Estoque** — preenche `current_stock`
 3. **Vendas** — preenche movimentações de saída
+4. **Compras** (FEATURE 012) — importa NF-e entrada via RPC (requer fornecedores com `document` cadastrado)
 
 Depois disso, o app Farol passa a mostrar o farol atualizado.
 

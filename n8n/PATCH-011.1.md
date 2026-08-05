@@ -37,6 +37,14 @@ Fontes: OpenAPI / SDKs Bling v3 (`IFindResponse.numeroDocumento`); schema produt
 
 Após backlog zerado: desative ou delete o workflow no n8n e pode apagar `n8n/farol-bling-backfill-gtin.json` do repo quando homologado.
 
+## PATCH 011.1b — fila sem loop
+
+Quando `GET /produtos/{id}` retorna **200** e não há GTIN utilizável, o backfill grava o marcador `SEM GTIN` em `products.gtin`.
+
+- Sai da fila (`gtin IS NULL` deixa de selecionar).
+- Erros de API **não** marcam (retentam).
+- Matching FEATURE 011 ignora `SEM GTIN` (não trata como EAN).
+
 ## Migration
 
 Nenhuma — colunas já criadas na FEATURE 011.

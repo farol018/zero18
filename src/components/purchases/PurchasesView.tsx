@@ -11,9 +11,9 @@ import type { MatchedPurchaseImport } from "@/lib/purchaseImport/matchPurchaseIm
 
 const FILTERS: Array<{ value: PurchaseStatus | "all"; label: string }> = [
   { value: "all", label: "Todos" },
-  { value: "draft", label: "Draft" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "cancelled", label: "Cancelled" },
+  { value: "draft", label: "Rascunho" },
+  { value: "confirmed", label: "Confirmado" },
+  { value: "cancelled", label: "Cancelado" },
 ];
 
 function money(value: number) {

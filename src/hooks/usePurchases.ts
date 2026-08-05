@@ -9,7 +9,8 @@ import {
   type PurchaseSource,
   type PurchaseStatus,
 } from "@/lib/purchaseStatus";
-import { lineTotal, sumPurchaseTotal } from "@/lib/purchaseTotals";
+import { sumPurchaseTotal } from "@/lib/purchaseTotals";
+import { toErrorMessage } from "@/lib/toErrorMessage";
 
 export type Purchase = {
   id: string;
@@ -210,22 +211,39 @@ export function usePurchaseMutations() {
         .single();
       if (error) {
         if (error.code === "23505") throw new Error("Esta NFe já foi importada.");
-        throw error;
+        throw new Error(toErrorMessage(error, "Não foi possível criar a compra."));
       }
 
       const rows = input.items.map((item) => ({
+        company_id: companyId,
         purchase_id: purchase.id,
         product_id: item.product_id,
         product_supplier_id: item.product_supplier_id ?? null,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
-        total_cost: lineTotal(item.quantity, item.unit_cost),
       }));
 
-      const { error: itemsError } = await supabase.from("purchase_items").insert(rows);
-      if (itemsError) {
-        await supabase.from("purchases").delete().eq("id", purchase.id);
-        throw itemsError;
+      const chunkSize = 100;
+      for (let i = 0; i < rows.length; i += chunkSize) {
+        const chunk = rows.slice(i, i + chunkSize);
+        const { error: itemsError } = await supabase.from("purchase_items").insert(chunk);
+        if (itemsError) {
+          const { error: cleanupError } = await supabase
+            .from("purchases")
+            .delete()
+            .eq("id", purchase.id);
+          if (cleanupError) {
+            throw new Error(
+              `${toErrorMessage(itemsError, "Erro ao salvar itens da compra.")} (também falhou ao reverter o rascunho: ${toErrorMessage(cleanupError, "cleanup")})`,
+            );
+          }
+          if (itemsError.code === "23503") {
+            throw new Error(
+              "Um dos produtos não existe mais no catálogo (foi excluído?). Reimporte o XML ou vincule outro produto.",
+            );
+          }
+          throw new Error(toErrorMessage(itemsError, "Erro ao salvar itens da compra."));
+        }
       }
 
       return purchase.id as string;
@@ -261,15 +279,17 @@ export function usePurchaseMutations() {
       if (delError) throw delError;
 
       const rows = input.items.map((item) => ({
+        company_id: companyId,
         purchase_id: input.id,
         product_id: item.product_id,
         product_supplier_id: item.product_supplier_id ?? null,
         quantity: item.quantity,
         unit_cost: item.unit_cost,
-        total_cost: lineTotal(item.quantity, item.unit_cost),
       }));
       const { error: itemsError } = await supabase.from("purchase_items").insert(rows);
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        throw new Error(toErrorMessage(itemsError, "Erro ao salvar itens da compra."));
+      }
     },
     onSuccess: invalidate,
   });

@@ -31,17 +31,17 @@ export function statusBadgeMeta(status: PurchaseStatus): {
   switch (status) {
     case "draft":
       return {
-        label: "🟡 Draft",
+        label: "🟡 Rascunho",
         className: "bg-warning/10 text-warning border-warning/20",
       };
     case "confirmed":
       return {
-        label: "🟢 Confirmed",
+        label: "🟢 Confirmado",
         className: "bg-green-500/10 text-green-700 border-green-500/20 dark:text-green-400",
       };
     case "cancelled":
       return {
-        label: "🔴 Cancelled",
+        label: "🔴 Cancelado",
         className: "bg-destructive/10 text-destructive border-destructive/20",
       };
   }

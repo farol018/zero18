@@ -49,8 +49,13 @@ import {
   getImportReadiness,
 } from "@/lib/purchaseImport/assertImportReady";
 import type { MatchedPurchaseImport } from "@/lib/purchaseImport/matchPurchaseImport";
+import { toErrorMessage } from "@/lib/toErrorMessage";
 
-type DraftLine = PurchaseItemInput & { key: string };
+type DraftLine = PurchaseItemInput & {
+  key: string;
+  product_name?: string | null;
+  product_sku?: string | null;
+};
 
 type Props = {
   open: boolean;
@@ -120,6 +125,8 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
             quantity: item.quantity,
             unit_cost: item.unitCost,
             product_supplier_id: item.productSupplierId,
+            product_name: item.productName,
+            product_sku: item.productSku,
           })),
         );
         setProductSearch("");
@@ -177,10 +184,19 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
       .slice(0, 40);
   }, [products.data, productSearch]);
 
-  const productName = (id: string) =>
-    products.data?.find((p) => p.id === id)?.name ??
-    detail.data?.items.find((i) => i.product_id === id)?.product_name ??
-    "Produto";
+  const lineLabel = (line: DraftLine) => {
+    if (!line.product_id) return "Produto não localizado";
+    const fromOptions = products.data?.find((p) => p.id === line.product_id);
+    if (fromOptions) {
+      return fromOptions.sku ? `${fromOptions.name} · ${fromOptions.sku}` : fromOptions.name;
+    }
+    if (line.product_name) {
+      return line.product_sku ? `${line.product_name} · ${line.product_sku}` : line.product_name;
+    }
+    const fromDetail = detail.data?.items.find((i) => i.product_id === line.product_id);
+    if (fromDetail?.product_name) return fromDetail.product_name;
+    return "Produto";
+  };
 
   const addProduct = (productId: string) => {
     if (!editable) return;
@@ -193,6 +209,8 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
         quantity: 1,
         unit_cost: Number(product?.cost_price ?? 0),
         product_supplier_id: null,
+        product_name: product?.name ?? null,
+        product_sku: product?.sku ?? null,
       },
     ]);
     setProductSearch("");
@@ -269,7 +287,8 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
       toast.success("NFe importada em rascunho.");
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Erro ao importar NFe.");
+      console.error("[import NFe]", e);
+      toast.error(toErrorMessage(e, "Erro ao importar NFe."));
     }
   };
 
@@ -322,7 +341,7 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
           <SheetHeader>
             <SheetTitle>{isNew ? "Nova compra" : "Compra"}</SheetTitle>
             <SheetDescription>
-              Fundação do módulo de compras. Confirmed é imutável.
+              Fundação do módulo de compras. Confirmado é imutável.
             </SheetDescription>
           </SheetHeader>
 
@@ -343,6 +362,15 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
                 onChange={(e) => setSupplierId(e.target.value)}
               >
                 <option value="">Selecione…</option>
+                {isXmlImport &&
+                  initialImport?.supplierId &&
+                  !(suppliers.data ?? []).some((s) => s.id === initialImport.supplierId) && (
+                    <option value={initialImport.supplierId}>
+                      {initialImport.model.supplier.name ??
+                        initialImport.model.supplier.document ??
+                        "Fornecedor da NFe"}
+                    </option>
+                  )}
                 {(suppliers.data ?? []).map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -447,7 +475,7 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
                   >
                     <div className="flex items-start justify-between gap-2">
                       <p className="text-sm font-medium leading-tight">
-                        {line.product_id ? productName(line.product_id) : "Produto não localizado"}
+                        {lineLabel(line)}
                       </p>
                       {editable && (
                         <Button
@@ -482,7 +510,11 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
                             type="button"
                             className="block w-full rounded px-1 py-1 text-left text-xs hover:bg-muted"
                             onClick={() => {
-                              updateLine(line.key, { product_id: product.id });
+                              updateLine(line.key, {
+                                product_id: product.id,
+                                product_name: product.name,
+                                product_sku: product.sku,
+                              });
                               setUnmatchedSearches((prev) => ({ ...prev, [line.key]: "" }));
                             }}
                           >
