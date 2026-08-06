@@ -49,6 +49,7 @@ Rodar no SQL Editor do projeto Supabase (ou via CLI), na ordem dos timestamps:
 | `20260804221000_feature_012_import_purchase_nfe_rpc.sql` | FEATURE 012 — RPC `import_purchase_nfe` + helpers de match |
 | `20260804222000_feature_012_purchase_stock_trigger.sql` | FEATURE 012 — trigger `purchases.status` → estoque entrada/reversão |
 | `20260805120000_feature_012_ensure_supplier.sql` | FEATURE 012 — auto-cria fornecedor pelo CNPJ da NFe (`fz_ensure_supplier`) |
+| `20260805140000_feature_012_reject_marketplace.sql` | FEATURE 012.1 — rejeita NFe EBAZAR/ML (`rejected_marketplace`) |
 
 Views Farol atuais = definição em **FEATURE 005**.
 
