@@ -50,6 +50,7 @@ Rodar no SQL Editor do projeto Supabase (ou via CLI), na ordem dos timestamps:
 | `20260804222000_feature_012_purchase_stock_trigger.sql` | FEATURE 012 — trigger `purchases.status` → estoque entrada/reversão |
 | `20260805120000_feature_012_ensure_supplier.sql` | FEATURE 012 — auto-cria fornecedor pelo CNPJ da NFe (`fz_ensure_supplier`) |
 | `20260805140000_feature_012_reject_marketplace.sql` | FEATURE 012.1 — rejeita NFe EBAZAR/ML (`rejected_marketplace`) |
+| `20260806150000_feature_015_last_purchase_cost.sql` | FEATURE 015 — último custo na confirmação de compra (+ backfill) |
 
 Views Farol atuais = definição em **FEATURE 005**.
 
@@ -79,7 +80,7 @@ Login (Supabase Auth)
 
 Janela de consumo e cobertura vêm de `companies.consumption_window_days` / `coverage_days` (não há seletor de período na UI — evita inconsistência com as views).
 
-## FEATURES 001–012 (resumo)
+## FEATURES 001–015 (resumo)
 
 1. **001** — Tabela `product_suppliers`  
 2. **002** — Backfill de vínculos  
@@ -93,6 +94,7 @@ Janela de consumo e cobertura vêm de `companies.consumption_window_days` / `cov
 10. **010** — Logística inteligente (`product_logistics` + `composeLogistics`)  
 11. **011** — Registro de compras via XML NFe (`parseNFeXml` → matching → `PurchaseSheet` → `createDraft` com `source=xml`)
 12. **012** — Importação automática NFe entrada BLING → RPC `import_purchase_nfe` + estoque na confirmação (trigger em `purchases.status`; cancel reverte)
+13. **015** — Último custo do produto a partir de compras confirmadas (trigger + backfill; Farol lê `COALESCE(ps.cost_price, p.cost_price)`)
 
 **Sprint 0** — Hardening: RLS, auth, paginação lista, migration 009 segura, índices, remoção de código morto, docs.
 
