@@ -1,7 +1,7 @@
 # FEATURE 017 — BI operacional de compras
 
 **Data:** 2026-08-07  
-**Status:** spec aprovada — aguardando plan + implementação  
+**Status:** implementada no repo — aguardando apply migration + aceite UI  
 **Depende de:** FEATURE 009–012 (compras + BLING), 016 (`source=farol` enriquece drafts)  
 **Roadmap:** `docs/superpowers/specs/2026-08-06-roadmap-pos-012-design.md`
 

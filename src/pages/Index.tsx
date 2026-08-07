@@ -6,9 +6,11 @@ import { SupplierOrderView } from "@/components/farol/SupplierOrderView";
 import { FarolFullTable } from "@/components/farol/FarolFullTable";
 import { FarolSummaryCards } from "@/components/farol/FarolSummaryCards";
 import { PurchasesView } from "@/components/purchases/PurchasesView";
+import { GestaoView } from "@/components/gestao/GestaoView";
+import { usePurchaseOpsKpis } from "@/hooks/usePurchaseOpsKpis";
 import type { FarolPurchaseSeed } from "@/lib/purchaseImport/buildFarolPurchaseSeed";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, ShoppingCart, BarChart3, RefreshCw, Package } from "lucide-react";
+import { AlertCircle, ShoppingCart, BarChart3, RefreshCw, Package, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -16,7 +18,7 @@ import farolLogo from "@/assets/farol-logo.png";
 
 export type StatusFilter = "all" | EffectiveStatus;
 
-type ViewMode = "pedido" | "analise" | "compras";
+type ViewMode = "pedido" | "analise" | "compras" | "gestao";
 
 const Index = () => {
   const [mode, setMode] = useState<ViewMode>("pedido");
@@ -35,6 +37,7 @@ const Index = () => {
 
   const farolMode: FarolViewMode = mode === "analise" ? "analise" : "pedido";
   const farolQuery = useFarol(farolMode);
+  const kpisQuery = usePurchaseOpsKpis();
 
   const isFarolMode = mode === "pedido" || mode === "analise";
   const isLoading = companyLoading || (isFarolMode && farolQuery.isLoading && !farolQuery.data);
@@ -112,12 +115,15 @@ const Index = () => {
                 </p>
               </div>
             </div>
-            {isFarolMode && (
+            {(isFarolMode || mode === "gestao") && (
               <Button
                 variant="outline"
                 size="sm"
                 className="shrink-0 gap-1.5"
-                onClick={() => void farolQuery.refetch()}
+                onClick={() => {
+                  if (mode === "gestao") void kpisQuery.refetch();
+                  else void farolQuery.refetch();
+                }}
               >
                 <RefreshCw className="h-3.5 w-3.5" />
                 Atualizar
@@ -171,6 +177,17 @@ const Index = () => {
               <Package className="h-4 w-4" />
               Compras
             </button>
+            <button
+              onClick={() => setMode("gestao")}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                mode === "gestao"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              Gestão
+            </button>
           </div>
         </div>
 
@@ -179,6 +196,8 @@ const Index = () => {
             pendingFarolSeed={farolSeed}
             onFarolSeedConsumed={() => setFarolSeed(null)}
           />
+        ) : mode === "gestao" ? (
+          <GestaoView />
         ) : isLoading || !data ? (
           <div className="space-y-4">
             <Skeleton className="h-24 w-full" />

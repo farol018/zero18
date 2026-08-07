@@ -52,6 +52,7 @@ Rodar no SQL Editor do projeto Supabase (ou via CLI), na ordem dos timestamps:
 | `20260805140000_feature_012_reject_marketplace.sql` | FEATURE 012.1 — rejeita NFe EBAZAR/ML (`rejected_marketplace`) |
 | `20260806150000_feature_015_last_purchase_cost.sql` | FEATURE 015 — último custo na confirmação de compra (+ backfill) |
 | `20260806160000_feature_016_purchase_source_farol.sql` | FEATURE 016 — `purchases.source` aceita `farol` |
+| `20260807120000_feature_017_purchase_ops_kpis.sql` | FEATURE 017 — KPIs aba Gestão |
 
 Views Farol atuais = definição em **FEATURE 005**.
 
@@ -78,6 +79,7 @@ Login (Supabase Auth)
 | Pedido | `useFarol("pedido")` → `SupplierOrderView` |
 | Análise | `useFarol("analise")` → `FarolFullTable` |
 | Compras | `usePurchases` → `PurchasesView` / `PurchaseSheet` |
+| Gestão | `usePurchaseOpsKpis` → `GestaoView` |
 
 Janela de consumo e cobertura vêm de `companies.consumption_window_days` / `coverage_days` (não há seletor de período na UI — evita inconsistência com as views).
 
