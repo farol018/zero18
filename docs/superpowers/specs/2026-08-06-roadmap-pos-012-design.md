@@ -105,10 +105,10 @@ Cada FEATURE: brainstorm/spec → plan → SDD/implementação → aceite. **Est
 
 ## Decisões em aberto (para specs futuras)
 
-1. FEATURE 016: origem `source` do draft gerado pelo Farol; escopo BLING export (016 vs 016.1).  
-2. FEATURE 017: métricas exatas do painel MVP.
+1. FEATURE 016.1: export pedido de compra ao BLING (fora do MVP 016).  
+2. FEATURE 017.1: BI Farol/estoque (fora do MVP 017 compras).
 
-(015: decisões fechadas na spec dedicada.)
+(015–017 compras: decisões fechadas nas specs dedicadas.)
 
 ## Histórico de decisão
 
@@ -120,3 +120,4 @@ Cada FEATURE: brainstorm/spec → plan → SDD/implementação → aceite. **Est
 | 2026-08-06 | Spec 015 aprovada (último custo → products + PS; cancel não recalcula) |
 | 2026-08-06 | Manter ordem 015 → 016 → 017; **não** entregar BI meia-boca; pressão de BI tratada com comunicação + ordem definida |
 | 2026-08-06 | FEATURE 015: migration no repo; aguardando apply live + aceite |
+| 2026-08-07 | Spec 017 aprovada (Gestão / KPIs compras; Farol → 017.1) |
