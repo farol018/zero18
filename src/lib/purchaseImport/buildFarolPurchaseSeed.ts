@@ -41,7 +41,7 @@ export function buildFarolPurchaseSeed(input: {
       continue;
     }
     const cost = it.cost_price;
-    if (cost == null || !Number.isFinite(Number(cost))) {
+    if (cost == null || !Number.isFinite(Number(cost)) || Number(cost) <= 0) {
       skippedNoCost += 1;
       continue;
     }

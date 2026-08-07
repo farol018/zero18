@@ -147,12 +147,15 @@ function SupplierBlock({
   group,
   logisticsMap,
   selectedProductIds,
+  supplierCatalogItems,
   onToggleProduct,
   onGeneratePurchase,
 }: {
   group: SupplierBucket;
   logisticsMap?: Map<string, LogisticsLevel[]>;
   selectedProductIds: Set<string>;
+  /** Todos os itens do fornecedor no pedido (todas as categorias). */
+  supplierCatalogItems: FarolItem[];
   onToggleProduct: (productId: string) => void;
   onGeneratePurchase?: (seed: FarolPurchaseSeed) => void;
 }) {
@@ -166,9 +169,11 @@ function SupplierBlock({
     e.stopPropagation();
     if (!canGenerate || !group.supplier_id) return;
 
+    // Com seleção: consolidar itens marcados do fornecedor em todas as categorias (H-01).
+    // Sem seleção: manter o bloco atual (categoria × fornecedor).
     const pool =
       selectedProductIds.size > 0
-        ? group.items.filter((item) => selectedProductIds.has(item.product_id))
+        ? supplierCatalogItems.filter((item) => selectedProductIds.has(item.product_id))
         : group.items;
 
     const result = buildFarolPurchaseSeed({
@@ -298,6 +303,7 @@ function CategoryBlock({
   defaultOpen,
   logisticsMap,
   selectedBySupplier,
+  itemsBySupplierId,
   onToggleProduct,
   onGeneratePurchase,
 }: {
@@ -305,6 +311,7 @@ function CategoryBlock({
   defaultOpen: boolean;
   logisticsMap?: Map<string, LogisticsLevel[]>;
   selectedBySupplier: Record<string, Set<string>>;
+  itemsBySupplierId: Map<string, FarolItem[]>;
   onToggleProduct: (supplierId: string, productId: string) => void;
   onGeneratePurchase?: (seed: FarolPurchaseSeed) => void;
 }) {
@@ -338,6 +345,7 @@ function CategoryBlock({
                 group={supplier}
                 logisticsMap={logisticsMap}
                 selectedProductIds={selectedBySupplier[supplier.supplier_id] ?? new Set()}
+                supplierCatalogItems={itemsBySupplierId.get(supplier.supplier_id) ?? supplier.items}
                 onToggleProduct={(productId) =>
                   onToggleProduct(supplier.supplier_id, productId)
                 }
@@ -378,6 +386,16 @@ export function SupplierOrderView({ groups, onGeneratePurchase }: SupplierOrderV
 
   const items = useMemo(() => flattenPurchaseGroups(groups), [groups]);
   const productIds = useMemo(() => items.map((i) => i.product_id), [items]);
+  const itemsBySupplierId = useMemo(() => {
+    const map = new Map<string, FarolItem[]>();
+    for (const item of items) {
+      const sid = item.supplier_id ?? "sem-fornecedor";
+      const list = map.get(sid);
+      if (list) list.push(item);
+      else map.set(sid, [item]);
+    }
+    return map;
+  }, [items]);
   const logisticsQuery = useProductLogisticsMap(productIds);
   const logisticsMap = logisticsQuery.data;
 
@@ -491,6 +509,7 @@ export function SupplierOrderView({ groups, onGeneratePurchase }: SupplierOrderV
             defaultOpen={idx < 3}
             logisticsMap={logisticsMap}
             selectedBySupplier={selectedBySupplier}
+            itemsBySupplierId={itemsBySupplierId}
             onToggleProduct={toggleProductSelection}
             onGeneratePurchase={onGeneratePurchase}
           />

@@ -41,6 +41,16 @@ describe("buildFarolPurchaseSeed", () => {
     expect(r.seed.skippedNoCost).toBe(1);
   });
 
+  it("skips zero cost as invalid", () => {
+    const r = buildFarolPurchaseSeed({
+      supplierId: "s1",
+      supplierName: "Forn",
+      items: [{ ...base, cost_price: 0 } as any],
+      issuedAt: "2026-08-06",
+    });
+    expect(r.ok).toBe(false);
+  });
+
   it("returns no_eligible when all skipped", () => {
     const r = buildFarolPurchaseSeed({
       supplierId: "s1",

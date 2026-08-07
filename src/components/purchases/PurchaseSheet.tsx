@@ -74,6 +74,22 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function validateDraftLines(
+  lines: Array<{ product_id: string; quantity: number; unit_cost: number }>,
+): string | null {
+  if (lines.length === 0) return "Inclua ao menos um produto.";
+  for (const line of lines) {
+    if (!line.product_id?.trim()) return "Todas as linhas precisam de um produto.";
+    if (!(Number(line.quantity) > 0)) {
+      return "Informe quantidade maior que zero em todas as linhas.";
+    }
+    if (!Number.isFinite(Number(line.unit_cost)) || Number(line.unit_cost) < 0) {
+      return "Informe custo unitário válido (zero ou positivo) em todas as linhas.";
+    }
+  }
+  return null;
+}
+
 export function PurchaseSheet({
   open,
   onOpenChange,
@@ -101,7 +117,9 @@ export function PurchaseSheet({
   const [productSearch, setProductSearch] = useState("");
   const [unmatchedSearches, setUnmatchedSearches] = useState<Record<string, string>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   const lineProductIds = useMemo(() => lines.map((l) => l.product_id), [lines]);
   const logisticsMap = useProductLogisticsMap(lineProductIds).data;
@@ -285,6 +303,11 @@ export function PurchaseSheet({
   });
 
   const handleSave = async () => {
+    const lineError = validateDraftLines(lines);
+    if (lineError) {
+      toast.error(lineError);
+      return;
+    }
     try {
       if (isNew) {
         const id = await createDraft.mutateAsync({
@@ -308,7 +331,11 @@ export function PurchaseSheet({
         supplierId,
         items: lines.map((line) => ({ productId: line.product_id })),
       });
-      await createDraft.mutateAsync({
+      const lineError = validateDraftLines(lines);
+      if (lineError) {
+        toast.error(lineError);
+        return;
+      }      await createDraft.mutateAsync({
         ...payload(),
         source: "xml",
         external_id: externalId,
@@ -330,6 +357,15 @@ export function PurchaseSheet({
   };
 
   const handleConfirm = async () => {
+    if (confirmBusy) return;
+    if (isNew || editable) {
+      const lineError = validateDraftLines(lines);
+      if (lineError) {
+        toast.error(lineError);
+        return;
+      }
+    }
+    setConfirmBusy(true);
     try {
       if (isNew || editable) {
         if (isNew) {
@@ -350,6 +386,8 @@ export function PurchaseSheet({
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao confirmar.");
+    } finally {
+      setConfirmBusy(false);
     }
   };
 
@@ -357,6 +395,7 @@ export function PurchaseSheet({
     try {
       await cancelPurchase.mutateAsync(purchaseId!);
       toast.success("Compra cancelada.");
+      setCancelOpen(false);
       onOpenChange(false);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao cancelar.");
@@ -628,7 +667,7 @@ export function PurchaseSheet({
                     disabled={!importReadiness.ready || createDraft.isPending}
                     onClick={() => void handleImportConfirm()}
                   >
-                    Confirmar Importação
+                    Criar rascunho para revisão
                   </Button>
                   {!importReadiness.ready && (
                     <p className="w-full text-xs text-destructive">{importReadiness.message}</p>
@@ -640,12 +679,22 @@ export function PurchaseSheet({
                 </Button>
               )}
               {!isXmlImport && (isNew || canConfirmPurchase(status)) && (
-                <Button type="button" variant="default" onClick={() => setConfirmOpen(true)}>
+                <Button
+                  type="button"
+                  variant="default"
+                  disabled={confirmBusy}
+                  onClick={() => setConfirmOpen(true)}
+                >
                   Confirmar compra
                 </Button>
               )}
               {!isNew && canCancelPurchase(status) && (
-                <Button type="button" variant="outline" onClick={() => void handleCancel()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={cancelPurchase.isPending}
+                  onClick={() => setCancelOpen(true)}
+                >
                   Cancelar compra
                 </Button>
               )}
@@ -659,7 +708,7 @@ export function PurchaseSheet({
         </SheetContent>
       </Sheet>
 
-      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <AlertDialog open={confirmOpen} onOpenChange={(v) => !confirmBusy && setConfirmOpen(v)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar compra</AlertDialogTitle>
@@ -668,8 +717,31 @@ export function PurchaseSheet({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
+            <AlertDialogCancel disabled={confirmBusy}>Voltar</AlertDialogCancel>
+            <AlertDialogAction disabled={confirmBusy} onClick={() => void handleConfirm()}>
+              {confirmBusy ? "Confirmando…" : "Confirmar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar compra</AlertDialogTitle>
+            <AlertDialogDescription>
+              As entradas de estoque desta compra serão removidas. Esta ação não pode ser desfeita
+              facilmente. Deseja cancelar?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
             <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void handleConfirm()}>Confirmar</AlertDialogAction>
+            <AlertDialogAction
+              disabled={cancelPurchase.isPending}
+              onClick={() => void handleCancel()}
+            >
+              Cancelar compra
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

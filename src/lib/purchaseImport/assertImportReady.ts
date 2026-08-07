@@ -7,15 +7,35 @@ export type ImportReadiness = {
   ready: boolean;
   missingSupplier: boolean;
   unboundProductCount: number;
+  emptyItems: boolean;
   message: string | null;
 };
 
 export function getImportReadiness(input: ImportReadinessInput): ImportReadiness {
   const missingSupplier = !input.supplierId?.trim();
+  const emptyItems = input.items.length === 0;
   const unboundProductCount = input.items.filter((item) => !item.productId?.trim()).length;
 
-  if (!missingSupplier && unboundProductCount === 0) {
-    return { ready: true, missingSupplier, unboundProductCount, message: null };
+  if (!missingSupplier && !emptyItems && unboundProductCount === 0) {
+    return {
+      ready: true,
+      missingSupplier,
+      unboundProductCount,
+      emptyItems,
+      message: null,
+    };
+  }
+
+  if (emptyItems) {
+    return {
+      ready: false,
+      missingSupplier,
+      unboundProductCount,
+      emptyItems: true,
+      message: missingSupplier
+        ? "Selecione o fornecedor e inclua ao menos um item."
+        : "A NFe não possui itens para importar.",
+    };
   }
 
   const productsMessage = `Vincule ${unboundProductCount} ${
@@ -27,7 +47,7 @@ export function getImportReadiness(input: ImportReadinessInput): ImportReadiness
       : "Selecione o fornecedor."
     : productsMessage;
 
-  return { ready: false, missingSupplier, unboundProductCount, message };
+  return { ready: false, missingSupplier, unboundProductCount, emptyItems, message };
 }
 
 export function assertImportReady(input: ImportReadinessInput): void {

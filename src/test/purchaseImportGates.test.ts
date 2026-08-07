@@ -10,6 +10,7 @@ describe("getImportReadiness", () => {
       ready: false,
       missingSupplier: true,
       unboundProductCount: 0,
+      emptyItems: false,
       message: "Selecione o fornecedor.",
     });
   });
@@ -24,6 +25,7 @@ describe("getImportReadiness", () => {
       ready: false,
       missingSupplier: false,
       unboundProductCount: 2,
+      emptyItems: false,
       message: "Vincule 2 produtos ainda sem correspondência.",
     });
   });
@@ -38,7 +40,18 @@ describe("getImportReadiness", () => {
       ready: false,
       missingSupplier: true,
       unboundProductCount: 1,
+      emptyItems: false,
       message: "Selecione o fornecedor e vincule 1 produto ainda sem correspondência.",
+    });
+  });
+
+  it("blocks import when there are no items", () => {
+    expect(getImportReadiness({ supplierId: "supplier-1", items: [] })).toEqual({
+      ready: false,
+      missingSupplier: false,
+      unboundProductCount: 0,
+      emptyItems: true,
+      message: "A NFe não possui itens para importar.",
     });
   });
 
@@ -52,6 +65,7 @@ describe("getImportReadiness", () => {
       ready: true,
       missingSupplier: false,
       unboundProductCount: 0,
+      emptyItems: false,
       message: null,
     });
   });
