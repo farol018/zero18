@@ -49,6 +49,7 @@ import {
   getImportReadiness,
 } from "@/lib/purchaseImport/assertImportReady";
 import type { MatchedPurchaseImport } from "@/lib/purchaseImport/matchPurchaseImport";
+import type { FarolPurchaseSeed } from "@/lib/purchaseImport/buildFarolPurchaseSeed";
 import { toErrorMessage } from "@/lib/toErrorMessage";
 
 type DraftLine = PurchaseItemInput & {
@@ -62,6 +63,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   purchaseId: string | null;
   initialImport?: MatchedPurchaseImport | null;
+  initialFarolSeed?: FarolPurchaseSeed | null;
 };
 
 function todayISODate() {
@@ -72,9 +74,16 @@ function money(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = null }: Props) {
+export function PurchaseSheet({
+  open,
+  onOpenChange,
+  purchaseId,
+  initialImport = null,
+  initialFarolSeed = null,
+}: Props) {
   const isNew = purchaseId == null;
   const isXmlImport = isNew && initialImport != null;
+  const isFarolImport = isNew && initialFarolSeed != null;
   const detail = usePurchase(isNew ? null : purchaseId);
   const { createDraft, updateDraft, confirmPurchase, cancelPurchase, deleteDraft } =
     usePurchaseMutations();
@@ -103,7 +112,9 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
   const source: PurchaseSource = isNew
     ? isXmlImport
       ? "xml"
-      : "manual"
+      : isFarolImport
+        ? "farol"
+        : "manual"
     : (detail.data?.purchase.source ?? "manual");
   const editable = isNew || canEditPurchase(status);
 
@@ -125,6 +136,29 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
             quantity: item.quantity,
             unit_cost: item.unitCost,
             product_supplier_id: item.productSupplierId,
+            product_name: item.productName,
+            product_sku: item.productSku,
+          })),
+        );
+        setProductSearch("");
+        setUnmatchedSearches({});
+        return;
+      }
+      if (initialFarolSeed) {
+        setSupplierId(initialFarolSeed.supplierId);
+        setIssuedAt(initialFarolSeed.issuedAt);
+        setReceivedAt("");
+        setInvoiceNumber("");
+        setInvoiceSeries("");
+        setExternalId("");
+        setNotes("");
+        setLines(
+          initialFarolSeed.items.map((item) => ({
+            key: crypto.randomUUID(),
+            product_id: item.product_id,
+            quantity: item.quantity,
+            unit_cost: item.unit_cost,
+            product_supplier_id: null,
             product_name: item.productName,
             product_sku: item.productSku,
           })),
@@ -163,7 +197,7 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
         product_supplier_id: item.product_supplier_id,
       })),
     );
-  }, [open, isNew, detail.data, initialImport]);
+  }, [open, isNew, detail.data, initialImport, initialFarolSeed]);
 
   const total = useMemo(() => sumPurchaseTotal(lines), [lines]);
   const importReadiness = useMemo(
@@ -253,7 +287,10 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
   const handleSave = async () => {
     try {
       if (isNew) {
-        const id = await createDraft.mutateAsync(payload());
+        const id = await createDraft.mutateAsync({
+          ...payload(),
+          source: initialFarolSeed ? "farol" : "manual",
+        });
         toast.success("Compra criada em rascunho.");
         onOpenChange(false);
         return id;
@@ -296,7 +333,10 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
     try {
       if (isNew || editable) {
         if (isNew) {
-          const id = await createDraft.mutateAsync(payload());
+          const id = await createDraft.mutateAsync({
+            ...payload(),
+            source: initialFarolSeed ? "farol" : "manual",
+          });
           await confirmPurchase.mutateAsync(id);
         } else {
           await updateDraft.mutateAsync({ id: purchaseId!, ...payload() });
@@ -357,7 +397,7 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
               <Label>Fornecedor</Label>
               <select
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                disabled={!editable}
+                disabled={!editable || isFarolImport}
                 value={supplierId}
                 onChange={(e) => setSupplierId(e.target.value)}
               >
@@ -369,6 +409,13 @@ export function PurchaseSheet({ open, onOpenChange, purchaseId, initialImport = 
                       {initialImport.model.supplier.name ??
                         initialImport.model.supplier.document ??
                         "Fornecedor da NFe"}
+                    </option>
+                  )}
+                {isFarolImport &&
+                  initialFarolSeed?.supplierId &&
+                  !(suppliers.data ?? []).some((s) => s.id === initialFarolSeed.supplierId) && (
+                    <option value={initialFarolSeed.supplierId}>
+                      {initialFarolSeed.supplierName}
                     </option>
                   )}
                 {(suppliers.data ?? []).map((s) => (

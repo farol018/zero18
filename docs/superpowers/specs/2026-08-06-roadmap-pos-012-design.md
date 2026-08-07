@@ -52,18 +52,12 @@ Não gera número de FEATURE.
 
 ## FEATURE 016 — Pedido → compra *(2ª)*
 
-**Objetivo:** a partir do Farol / lista / pedido por fornecedor, gerar `purchases` + `purchase_items` em **draft** (revisão na UI atual de Compras).
+**Spec:** `docs/superpowers/specs/2026-08-06-feature-016-pedido-to-purchase-design.md`  
+**Plan:** `docs/superpowers/plans/2026-08-06-feature-016-pedido-to-purchase.md`
 
-**Direção (a detalhar na spec):**
+**Objetivo:** a partir do Pedido Farol, gerar `purchases` draft `source=farol` (todas as linhas ou seleção), revisar no PurchaseSheet.
 
-- Entrada: seleção de linhas do pedido (ou “gerar compra deste fornecedor”)  
-- Saída: draft com `source` dedicado (ex. `farol` / `manual`) — não confundir com `bling`/`xml`  
-- Usuário confirma → mesmo trigger de estoque da 012  
-- Opcional posterior: empurrar pedido de compra ao BLING (pode ser 016.1)  
-
-**Aceite (rascunho):** um clique (ou fluxo curto) cria draft coerente com o pedido; confirm atualiza estoque como hoje.
-
-**Dependências:** 015 recomendada antes (custo nas linhas); 009 UI compras.
+**Dependências:** 015 (custo); 009 UI compras.
 
 ---
 

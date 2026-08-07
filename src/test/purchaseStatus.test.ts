@@ -4,6 +4,7 @@ import {
   canConfirmPurchase,
   canDeletePurchase,
   canEditPurchase,
+  SOURCE_LABELS,
 } from "@/lib/purchaseStatus";
 
 describe("FEATURE 009 purchaseStatus", () => {
@@ -26,5 +27,9 @@ describe("FEATURE 009 purchaseStatus", () => {
     expect(canDeletePurchase("cancelled")).toBe(false);
     expect(canConfirmPurchase("cancelled")).toBe(false);
     expect(canCancelPurchase("cancelled")).toBe(false);
+  });
+
+  it("SOURCE_LABELS includes farol", () => {
+    expect(SOURCE_LABELS.farol).toBe("Farol");
   });
 });

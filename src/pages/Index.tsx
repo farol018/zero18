@@ -6,6 +6,7 @@ import { SupplierOrderView } from "@/components/farol/SupplierOrderView";
 import { FarolFullTable } from "@/components/farol/FarolFullTable";
 import { FarolSummaryCards } from "@/components/farol/FarolSummaryCards";
 import { PurchasesView } from "@/components/purchases/PurchasesView";
+import type { FarolPurchaseSeed } from "@/lib/purchaseImport/buildFarolPurchaseSeed";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, ShoppingCart, BarChart3, RefreshCw, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ type ViewMode = "pedido" | "analise" | "compras";
 const Index = () => {
   const [mode, setMode] = useState<ViewMode>("pedido");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [farolSeed, setFarolSeed] = useState<FarolPurchaseSeed | null>(null);
 
   const {
     companyId,
@@ -173,7 +175,10 @@ const Index = () => {
         </div>
 
         {mode === "compras" ? (
-          <PurchasesView />
+          <PurchasesView
+            pendingFarolSeed={farolSeed}
+            onFarolSeedConsumed={() => setFarolSeed(null)}
+          />
         ) : isLoading || !data ? (
           <div className="space-y-4">
             <Skeleton className="h-24 w-full" />
@@ -219,7 +224,13 @@ const Index = () => {
                   cobertura.
                 </p>
                 <div className="pt-2">
-                  <SupplierOrderView groups={data.purchaseGroups} />
+                  <SupplierOrderView
+                    groups={data.purchaseGroups}
+                    onGeneratePurchase={(seed) => {
+                      setFarolSeed(seed);
+                      setMode("compras");
+                    }}
+                  />
                 </div>
               </div>
             ) : (

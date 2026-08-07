@@ -96,21 +96,25 @@ O workflow `farol-bling-sync-compras.json` importa **NF-e de entrada** (compras)
 | `nfe_tipo` | `0` | 0 = entrada (compra) |
 | `nfe_series` | *(vazio)* | Aceita qualquer série do fornecedor |
 | `dias_janela` | `14` | Janela rolante de emissão |
-| `nfe_max_detalhe` | `400` | Máx. detalhes `GET /nfe/{id}` por execução |
+| `nfe_max_detalhe` | `250` | Máx. detalhes `GET /nfe/{id}` por execução (evita timeout ~1h40) |
+| `bling_interval_ms` | `3000` | Intervalo entre calls BLING (ms) |
 | `modo_teste` | `0` | `1` limita a `nfe_limite` notas (dry-run parcial) |
 
 Fluxo:
 
 1. Lista BLING `GET /nfe?tipo=0` com paginação (até 20 páginas) e janela de 14 dias.
-2. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING 4s.
-3. Code **Montar payloads RPC** mapeia chave NFe, fornecedor (`contato`/`emitente`), itens (`gtin`, `codigo`, `quantidade`, `valorUnitario`) — **CFOP por item** (`it.cfop`) agregado em `cfops`.
-4. Devoluções/retornos: soft-skip no n8n (natureza ou CFOP 1201/1202/2201/2202/1410/2410); o RPC `fz_is_purchase_return` também rejeita se passar.
-5. `POST /rest/v1/rpc/import_purchase_nfe` com credencial `farol_supabase` (service_role).
-6. Nó **Resultado** agrega: `confirmed`, `draft`, `skipped_duplicate`, `rejected_return`, `error`.
+2. **Antes do detalhe:** pula EBAZAR/ML na lista por chave NFe (CNPJ raiz `03007331`), CNPJ do `contato`, ou nome (`ebazar` / `mercado livre`) — assim o teto `nfe_max_detalhe` não é gasto só em marketplace.
+3. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING ~3s.
+4. Code **Montar payloads RPC** mapeia chave NFe, fornecedor (`contato`/`emitente`), itens (`gtin`, `codigo`, `quantidade`, `valorUnitario`) — **CFOP por item** (`it.cfop`) agregado em `cfops`.
+5. Devoluções/retornos e marketplace: soft-skip no n8n; RPC também rejeita (`rejected_return` / `rejected_marketplace`).
+6. `POST /rest/v1/rpc/import_purchase_nfe` com credencial `farol_supabase` (service_role).
+7. Nó **Resultado** agrega: `confirmed`, `draft`, `skipped_duplicate`, `rejected_return`, `rejected_marketplace`, `error`, `ignoradas_marketplace_lista`.
+
+**Timeout:** a instância n8n costuma matar runs ~1h40. Não subir `nfe_max_detalhe` acima de ~300 sem baixar o intervalo; o cron 4h esvazia a janela em várias execuções.
 
 Match 100% → `confirmed` + estoque (trigger); incompleto → `draft`; duplicata → `skipped_duplicate`.
 
-**Pré-requisito:** migrations FEATURE 012 aplicadas no Supabase (`import_purchase_nfe` + trigger estoque).
+**Pré-requisito:** migrations FEATURE 012 aplicadas no Supabase (`import_purchase_nfe` + trigger estoque + rejeição marketplace).
 
 Após importar no n8n, ligue `bling_vitor` + `farol_supabase` nos nós HTTP e rode manualmente com `modo_teste=1` antes de ativar o agendamento 4h.
 

@@ -16,10 +16,15 @@ import {
   FileText,
   Tags,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useMemo, useState } from "react";
 import { toast } from "@/hooks/use-toast";
 import { generateSupplierPdf } from "@/lib/generateSupplierPdf";
 import { formatProductLabel } from "@/lib/formatProduct";
+import {
+  buildFarolPurchaseSeed,
+  type FarolPurchaseSeed,
+} from "@/lib/purchaseImport/buildFarolPurchaseSeed";
 import {
   buildPurchaseListHierarchy,
   flattenPurchaseGroups,
@@ -82,9 +87,13 @@ function generateOrderText(
 function SupplierItemRow({
   item,
   logisticsMap,
+  checked,
+  onCheckedChange,
 }: {
   item: FarolItem;
   logisticsMap?: Map<string, LogisticsLevel[]>;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
 }) {
   const { qty, boxes, value } = itemPurchaseMetrics(item);
   const isRuptura = (item.status_estoque ?? "").toLowerCase().includes("ruptura");
@@ -97,6 +106,12 @@ function SupplierItemRow({
       } transition-colors`}
     >
       <div className="flex items-center gap-2 min-w-0 flex-1">
+        <Checkbox
+          checked={checked}
+          onCheckedChange={(value) => onCheckedChange(value === true)}
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`Selecionar ${formatProductLabel(item)}`}
+        />
         <StatusBadge status={item.status_estoque ?? ""} />
         <TooltipProvider>
           <Tooltip>
@@ -131,12 +146,63 @@ function SupplierItemRow({
 function SupplierBlock({
   group,
   logisticsMap,
+  selectedProductIds,
+  onToggleProduct,
+  onGeneratePurchase,
 }: {
   group: SupplierBucket;
   logisticsMap?: Map<string, LogisticsLevel[]>;
+  selectedProductIds: Set<string>;
+  onToggleProduct: (productId: string) => void;
+  onGeneratePurchase?: (seed: FarolPurchaseSeed) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  const canGenerate =
+    Boolean(group.supplier_id) && group.supplier_id !== "sem-fornecedor";
+
+  const handleGenerate = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!canGenerate || !group.supplier_id) return;
+
+    const pool =
+      selectedProductIds.size > 0
+        ? group.items.filter((item) => selectedProductIds.has(item.product_id))
+        : group.items;
+
+    const result = buildFarolPurchaseSeed({
+      supplierId: group.supplier_id,
+      supplierName: group.supplier_name ?? "Fornecedor",
+      items: pool,
+      issuedAt: new Date().toISOString().slice(0, 10),
+    });
+
+    if (!result.ok) {
+      toast({
+        title: "Nenhum item elegível",
+        description: "Itens sem custo ou quantidade inválida.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (result.seed.skippedNoCost > 0) {
+      toast({
+        title: "Itens omitidos",
+        description: `${result.seed.skippedNoCost} sem custo ficaram de fora.`,
+      });
+    }
+
+    if (result.seed.skippedNonPositiveQty > 0) {
+      toast({
+        title: "Itens omitidos",
+        description: `${result.seed.skippedNonPositiveQty} com quantidade inválida ficaram de fora.`,
+      });
+    }
+
+    onGeneratePurchase?.(result.seed);
+  };
 
   const handleCopy = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -179,6 +245,17 @@ function SupplierBlock({
               </p>
             </div>
             <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              {canGenerate && onGeneratePurchase && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-xs gap-1 px-2"
+                  onClick={handleGenerate}
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  Gerar compra
+                </Button>
+              )}
               <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleCopy}>
                 {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
               </Button>
@@ -205,6 +282,8 @@ function SupplierBlock({
                 key={item.product_id}
                 item={item}
                 logisticsMap={logisticsMap}
+                checked={selectedProductIds.has(item.product_id)}
+                onCheckedChange={() => onToggleProduct(item.product_id)}
               />
             ))}
           </div>
@@ -218,10 +297,16 @@ function CategoryBlock({
   category,
   defaultOpen,
   logisticsMap,
+  selectedBySupplier,
+  onToggleProduct,
+  onGeneratePurchase,
 }: {
   category: CategoryBucket;
   defaultOpen: boolean;
   logisticsMap?: Map<string, LogisticsLevel[]>;
+  selectedBySupplier: Record<string, Set<string>>;
+  onToggleProduct: (supplierId: string, productId: string) => void;
+  onGeneratePurchase?: (seed: FarolPurchaseSeed) => void;
 }) {
   const [open, setOpen] = useState(defaultOpen);
 
@@ -252,6 +337,11 @@ function CategoryBlock({
                 key={`${category.category_id}-${supplier.supplier_id}`}
                 group={supplier}
                 logisticsMap={logisticsMap}
+                selectedProductIds={selectedBySupplier[supplier.supplier_id] ?? new Set()}
+                onToggleProduct={(productId) =>
+                  onToggleProduct(supplier.supplier_id, productId)
+                }
+                onGeneratePurchase={onGeneratePurchase}
               />
             ))}
           </div>
@@ -263,6 +353,7 @@ function CategoryBlock({
 
 interface SupplierOrderViewProps {
   groups: SupplierGroup[];
+  onGeneratePurchase?: (seed: FarolPurchaseSeed) => void;
 }
 
 const SORT_OPTIONS: { value: PurchaseSortMode; label: string }[] = [
@@ -272,8 +363,18 @@ const SORT_OPTIONS: { value: PurchaseSortMode; label: string }[] = [
   { value: "value", label: "Valor" },
 ];
 
-export function SupplierOrderView({ groups }: SupplierOrderViewProps) {
+export function SupplierOrderView({ groups, onGeneratePurchase }: SupplierOrderViewProps) {
   const [sortMode, setSortMode] = useState<PurchaseSortMode>("priority");
+  const [selectedBySupplier, setSelectedBySupplier] = useState<Record<string, Set<string>>>({});
+
+  const toggleProductSelection = (supplierId: string, productId: string) => {
+    setSelectedBySupplier((prev) => {
+      const current = new Set(prev[supplierId] ?? []);
+      if (current.has(productId)) current.delete(productId);
+      else current.add(productId);
+      return { ...prev, [supplierId]: current };
+    });
+  };
 
   const items = useMemo(() => flattenPurchaseGroups(groups), [groups]);
   const productIds = useMemo(() => items.map((i) => i.product_id), [items]);
@@ -389,6 +490,9 @@ export function SupplierOrderView({ groups }: SupplierOrderViewProps) {
             category={category}
             defaultOpen={idx < 3}
             logisticsMap={logisticsMap}
+            selectedBySupplier={selectedBySupplier}
+            onToggleProduct={toggleProductSelection}
+            onGeneratePurchase={onGeneratePurchase}
           />
         ))}
       </div>

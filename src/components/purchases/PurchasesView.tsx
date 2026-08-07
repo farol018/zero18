@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, Package } from "lucide-react";
@@ -8,6 +8,7 @@ import { PurchaseStatusBadge } from "@/components/purchases/PurchaseStatusBadge"
 import { PurchaseSheet } from "@/components/purchases/PurchaseSheet";
 import { RegisterPurchaseDialog } from "@/components/purchases/RegisterPurchaseDialog";
 import type { MatchedPurchaseImport } from "@/lib/purchaseImport/matchPurchaseImport";
+import type { FarolPurchaseSeed } from "@/lib/purchaseImport/buildFarolPurchaseSeed";
 
 const FILTERS: Array<{ value: PurchaseStatus | "all"; label: string }> = [
   { value: "all", label: "Todos" },
@@ -26,35 +27,59 @@ function formatDate(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-export function PurchasesView() {
+type PurchasesViewProps = {
+  pendingFarolSeed?: FarolPurchaseSeed | null;
+  onFarolSeedConsumed?: () => void;
+};
+
+export function PurchasesView({
+  pendingFarolSeed = null,
+  onFarolSeedConsumed,
+}: PurchasesViewProps = {}) {
   const [statusFilter, setStatusFilter] = useState<PurchaseStatus | "all">("all");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [initialImport, setInitialImport] = useState<MatchedPurchaseImport | null>(null);
+  const [initialFarolSeed, setInitialFarolSeed] = useState<FarolPurchaseSeed | null>(null);
   const list = usePurchasesList(statusFilter);
+
+  useEffect(() => {
+    if (!pendingFarolSeed) return;
+    setSelectedId(null);
+    setInitialImport(null);
+    setInitialFarolSeed(pendingFarolSeed);
+    setSheetOpen(true);
+    onFarolSeedConsumed?.();
+  }, [pendingFarolSeed, onFarolSeedConsumed]);
 
   const openNew = () => {
     setSelectedId(null);
     setInitialImport(null);
+    setInitialFarolSeed(null);
     setSheetOpen(true);
   };
 
   const openPurchase = (purchase: Purchase) => {
     setSelectedId(purchase.id);
     setInitialImport(null);
+    setInitialFarolSeed(null);
     setSheetOpen(true);
   };
 
   const openXmlReview = (matched: MatchedPurchaseImport) => {
     setSelectedId(null);
     setInitialImport(matched);
+    setInitialFarolSeed(null);
     setSheetOpen(true);
   };
 
   const handleSheetOpenChange = (open: boolean) => {
     setSheetOpen(open);
-    if (!open) setInitialImport(null);
+    if (!open) {
+      setInitialImport(null);
+      setInitialFarolSeed(null);
+    }
   };
 
   return (
@@ -143,6 +168,7 @@ export function PurchasesView() {
         onOpenChange={handleSheetOpenChange}
         purchaseId={selectedId}
         initialImport={initialImport}
+        initialFarolSeed={initialFarolSeed}
       />
       <RegisterPurchaseDialog
         open={registerOpen}

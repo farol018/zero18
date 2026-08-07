@@ -1,11 +1,12 @@
 export type PurchaseStatus = "draft" | "confirmed" | "cancelled";
-export type PurchaseSource = "manual" | "xml" | "csv" | "bling";
+export type PurchaseSource = "manual" | "xml" | "csv" | "bling" | "farol";
 
 export const SOURCE_LABELS: Record<PurchaseSource, string> = {
   manual: "Manual",
   xml: "XML",
   csv: "CSV",
   bling: "BLING",
+  farol: "Farol",
 };
 
 export function canEditPurchase(status: PurchaseStatus): boolean {
