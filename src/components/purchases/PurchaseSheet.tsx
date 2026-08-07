@@ -218,6 +218,12 @@ export function PurchaseSheet({
   }, [open, isNew, detail.data, initialImport, initialFarolSeed]);
 
   const total = useMemo(() => sumPurchaseTotal(lines), [lines]);
+  const headerTotal =
+    !isNew && lines.length === 0 && detail.data?.purchase
+      ? Number(detail.data.purchase.total_amount ?? 0)
+      : total;
+  const isEmptyBlingDraft =
+    !isNew && source === "bling" && status === "draft" && lines.length === 0;
   const importReadiness = useMemo(
     () => getImportReadiness({ supplierId, items: lines.map((line) => ({ productId: line.product_id })) }),
     [lines, supplierId],
@@ -441,6 +447,13 @@ export function PurchaseSheet({
                 onChange={(e) => setSupplierId(e.target.value)}
               >
                 <option value="">Selecione…</option>
+                {!isNew &&
+                  supplierId &&
+                  !(suppliers.data ?? []).some((s) => s.id === supplierId) && (
+                    <option value={supplierId}>
+                      {detail.data?.purchase.supplier_name ?? "Fornecedor da compra"}
+                    </option>
+                  )}
                 {isXmlImport &&
                   initialImport?.supplierId &&
                   !(suppliers.data ?? []).some((s) => s.id === initialImport.supplierId) && (
@@ -521,8 +534,18 @@ export function PurchaseSheet({
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Itens</Label>
-                <span className="text-sm font-medium">{money(total)}</span>
+                <span className="text-sm font-medium">{money(headerTotal)}</span>
               </div>
+
+              {isEmptyBlingDraft && (
+                <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-foreground space-y-1">
+                  <p className="font-medium">Nenhum produto desta NFe casou com o catálogo.</p>
+                  <p className="text-muted-foreground">
+                    Cadastre/vincule os produtos (GTIN/SKU/código) e exclua este rascunho — novas
+                    importações BLING sem match não criarão mais compra vazia após o hotfix SQL.
+                  </p>
+                </div>
+              )}
 
               {editable && (
                 <div className="space-y-2 rounded-md border border-border p-2">
@@ -682,7 +705,7 @@ export function PurchaseSheet({
                 <Button
                   type="button"
                   variant="default"
-                  disabled={confirmBusy}
+                  disabled={confirmBusy || lines.length === 0}
                   onClick={() => setConfirmOpen(true)}
                 >
                   Confirmar compra
