@@ -63,18 +63,11 @@ Não gera número de FEATURE.
 
 ## FEATURE 017 — BI operacional *(3ª)*
 
-**Objetivo:** painel simples para gestão, sem projeto de analytics separado.
+**Spec:** `docs/superpowers/specs/2026-08-07-feature-017-purchase-ops-bi-design.md` (aprovada 2026-08-07).
 
-**Métricas candidatas:**
+**Objetivo:** painel leve de **compras** (aba Gestão): entradas 14/30d, drafts por origem, % confirmado/(confirmado+draft), top 5 fornecedores, cancelados. Sem BI externo. Farol/estoque → **017.1**.
 
-- Entradas (compras confirmadas) últimos 14/30 dias — valor e qtd  
-- % match / drafts abertos (`source=bling`)  
-- Top fornecedores por volume  
-- Cancelamentos / rejeições marketplace (ops)  
-
-**Direção:** views SQL + aba ou página leve no app; sem BI externo no MVP da 017.
-
-**Dependências:** volume de compras 011/012; 016 enriquece se “origem Farol” existir.
+**Dependências:** volume de compras 011/012; 016 enriquece drafts `farol`.
 
 ---
 
