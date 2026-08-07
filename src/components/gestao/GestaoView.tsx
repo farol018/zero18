@@ -30,17 +30,7 @@ function WindowCard({ title, w }: { title: string; w: PurchaseOpsWindowKpis }) {
 export function GestaoView() {
   const q = usePurchaseOpsKpis();
 
-  if (q.isLoading && !q.data) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-28 w-full" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
-  }
-
-  if (q.error) {
+  if (q.error && !q.data) {
     return (
       <div className="rounded-lg border border-destructive/30 p-6 text-center space-y-3">
         <AlertCircle className="h-6 w-6 text-destructive mx-auto" />
@@ -52,7 +42,17 @@ export function GestaoView() {
     );
   }
 
-  const data = q.data!;
+  if (!q.data) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-28 w-full" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  const data = q.data;
   const emptyConfirmed =
     data.windows.d14.confirmed_count === 0 && data.windows.d30.confirmed_count === 0;
 

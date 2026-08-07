@@ -37,7 +37,7 @@ const Index = () => {
 
   const farolMode: FarolViewMode = mode === "analise" ? "analise" : "pedido";
   const farolQuery = useFarol(farolMode);
-  const kpisQuery = usePurchaseOpsKpis();
+  const kpisQuery = usePurchaseOpsKpis({ enabled: mode === "gestao" });
 
   const isFarolMode = mode === "pedido" || mode === "analise";
   const isLoading = companyLoading || (isFarolMode && farolQuery.isLoading && !farolQuery.data);
