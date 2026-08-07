@@ -78,7 +78,7 @@
             {
               "id": "a5",
               "name": "compras_max_paginas",
-              "value": 20,
+              "value": 100,
               "type": "number"
             },
             {
