@@ -99,16 +99,29 @@ O workflow `farol-bling-sync-compras.json` importa **NF-e de entrada** (compras)
 | `nfe_max_detalhe` | `250` | Máx. detalhes `GET /nfe/{id}` por execução (evita timeout ~1h40) |
 | `bling_interval_ms` | `3000` | Intervalo entre calls BLING (ms) |
 | `modo_teste` | `0` | `1` limita a `nfe_limite` notas (dry-run parcial) |
+| `nfe_naturezas_devolucao` | *(vazio)* | IDs de natureza de operação forçados como devolução (`22,33`). Só necessário se `/naturezas-operacoes` estiver indisponível |
 
 Fluxo:
 
-1. Lista BLING `GET /nfe?tipo=0` com paginação (até 20 páginas) e janela de 14 dias.
-2. **Antes do detalhe:** pula EBAZAR/ML na lista por chave NFe (CNPJ raiz `03007331`), CNPJ do `contato`, ou nome (`ebazar` / `mercado livre`) — assim o teto `nfe_max_detalhe` não é gasto só em marketplace.
-3. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING ~3s.
-4. Code **Montar payloads RPC** mapeia chave NFe, fornecedor (`contato`/`emitente`), itens (`gtin`, `codigo`, `quantidade`, `valorUnitario`) — **CFOP por item** (`it.cfop`) agregado em `cfops`.
-5. Devoluções/retornos e marketplace: soft-skip no n8n; RPC também rejeita (`rejected_return` / `rejected_marketplace`).
-6. `POST /rest/v1/rpc/import_purchase_nfe` com credencial `farol_supabase` (service_role).
-7. Nó **Resultado** agrega: `confirmed`, `draft`, `skipped_duplicate`, `rejected_return`, `rejected_marketplace`, `error`, `ignoradas_marketplace_lista`.
+1. Nó **BLING - Naturezas** (`GET /naturezas-operacoes?limite=100`) carrega as naturezas da conta e marca como devolução as que têm `devolu`/`retorno` na descrição.
+2. Lista BLING `GET /nfe?tipo=0` com paginação (até 20 páginas) e janela de 14 dias.
+3. **Antes do detalhe:** pula EBAZAR/ML na lista por chave NFe (CNPJ raiz `03007331`), CNPJ do `contato`, ou nome (`ebazar` / `mercado livre`) — assim o teto `nfe_max_detalhe` não é gasto só em marketplace.
+4. **Antes do detalhe:** pula devoluções pelo `naturezaOperacao.id` da listagem (IDs do passo 1 + `nfe_naturezas_devolucao`). Nota sem natureza na listagem segue para o detalhe (o filtro por CFOP/natureza continua valendo lá).
+5. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING ~3s.
+6. Code **Montar payloads RPC** mapeia chave NFe, fornecedor (`contato`/`emitente`), itens (`gtin`, `codigo`, `quantidade`, `valorUnitario`) — **CFOP por item** (`it.cfop`) agregado em `cfops`.
+7. Devoluções/retornos e marketplace: soft-skip no n8n; RPC também rejeita (`rejected_return` / `rejected_marketplace`).
+8. `POST /rest/v1/rpc/import_purchase_nfe` com credencial `farol_supabase` (service_role).
+9. Nó **Resultado** agrega: `confirmed`, `draft`, `skipped_duplicate`, `rejected_return`, `rejected_marketplace`, `rejected_no_match`, `error`, `ignoradas_marketplace_lista`, `ignoradas_devolucao_lista`.
+
+Diagnóstico do filtro de devolução no **Resultado**:
+
+| Campo | Leitura |
+|-------|---------|
+| `naturezas_carregadas` | Quantas naturezas vieram do BLING. `0` = endpoint sem permissão → use `nfe_naturezas_devolucao` |
+| `naturezas_devolucao_ids` | IDs em uso no filtro da listagem |
+| `ignoradas_devolucao_lista` | Devoluções barradas **antes** de gastar detalhe (é o ganho) |
+| `sem_natureza_lista` | Notas cuja listagem não trouxe natureza (ainda gastam detalhe) |
+| `naturezas_devolucao_detectadas` | `id:qtd` das devoluções que escaparam e só foram pegas no detalhe — copie esses IDs para `nfe_naturezas_devolucao` |
 
 **Timeout:** a instância n8n costuma matar runs ~1h40. Não subir `nfe_max_detalhe` acima de ~300 sem baixar o intervalo; o cron 4h esvazia a janela em várias execuções.
 
@@ -170,8 +183,9 @@ Mesma coisa nos workflows de **Estoque**, **Vendas** e **Compras** (nós HTTP BL
 2. **Workflows → Import from File**
 3. Importe os 3 JSON
 4. Em cada nó **Code** (`Sync fornecedores`, `Sync produtos`, etc.), selecione `bling_vitor` + `farol_supabase` (ver seção acima)
-5. No nó **Config**, confirme `company_id` e `supabase_url`
-6. Ative os workflows
+5. No workflow de **Compras**, confira também o nó **BLING - Naturezas** (HTTP): credencial `bling_vitor`
+6. No nó **Config**, confirme `company_id` e `supabase_url`
+7. Ative os workflows
 
 ## Ordem de execução (primeira vez)
 
