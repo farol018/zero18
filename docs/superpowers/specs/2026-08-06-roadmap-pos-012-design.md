@@ -1,20 +1,26 @@
 # Roadmap pós–FEATURE 012 — Farol Zero18
 
-**Data:** 2026-08-06  
-**Status:** planejamento aprovado (sem implementação nesta etapa)  
-**Contexto:** FEATURES 001–012 (+ 012.1 EBAZAR) no ar; sync compras BLING em estabilização.
+**Data:** 2026-08-07 (atualizado)  
+**Status:** ciclo 015–017 **entregue**; próximos passos definidos abaixo  
+**Contexto:** Farol 001–010 + compras 011/012/012.1 + custo 015 + Pedido→compra 016 + Gestão 017 (+ PATCH leitura) no ar / na branch `feature/017-purchase-ops-bi`.
 
 ## Objetivo deste documento
 
-Ordenar as **próximas fases** do produto depois do MVP de compras (XML + BLING), sem abrir implementação ainda. Cada FEATURE futura terá spec + plan próprios quando for a hora.
+Ordenar fases do produto depois do MVP de compras e registrar o que já fechou vs o que falta. Cada FEATURE futura terá spec + plan próprios quando for a hora.
 
 ## Prioridade do negócio (decidida)
 
-Do mais para o menos importante:
+**Histórico (já cumprido):** ciclo pedido→compra → BI compras (015–017).
 
-1. **Farol sugere, mas não vira compra fácil** → fechar o ciclo operacional  
-2. **Falta visão gerencial** → painel / números  
-3. **Higiene de sync/cadastro** → melhora com o tempo conforme o BLING sincroniza; não bloqueia 1 e 2  
+**Próximos (default sem dor aguda):**
+
+1. **Merge git** → `main` (ops)  
+2. **016.1** export compra → BLING  
+3. **014** cadastro/match  
+4. **013** hardening sync  
+5. **018** BI Farol/estoque  
+
+Por dor: ver tabela em “Ordem sugerida”.
 
 ## Estado atual (baseline)
 
@@ -22,95 +28,131 @@ Do mais para o menos importante:
 |-------|--------|
 | Motor Farol (views, lista, pedido, logística) | 001–010 feitos |
 | Compras manuais + XML | 009 + 011 |
-| Compras automáticas BLING entrada | 012 + 012.1 (bloqueio marketplace) |
+| Compras automáticas BLING entrada | 012 + 012.1 (bloqueio marketplace + filtro na lista) |
 | Estoque na confirmação / cancel | trigger `purchases.status` |
+| Último custo na confirmação | **015** feito |
+| Pedido → draft `source=farol` | **016** feito |
+| Aba Gestão (KPIs compras) | **017** feito |
+| Refino de leitura Gestão (drafts R$, taxa, ticket, % top) | **PATCH 017.1** feito *(não é BI Farol)* |
+
+**Git (ops):** branch `feature/017-purchase-ops-bi` @ remote; falta **merge → `main`** (+ push `main`).
 
 **Fora de escopo permanente (até nova decisão):** criar produto automático na importação; fluxo completo de devolução; PDF/SEFAZ direto; reescrever match no n8n.
 
-## Fase 0 — Fechar 012 (ops, não é FEATURE)
-
-- Aceite da sync com `nfe_max_detalhe` adequado  
-- Revisar drafts na UI  
-- Push dos commits locais quando o time quiser  
-- Confirmar que EBAZAR não recria compra e estoque faz sentido  
-
-Não gera número de FEATURE.
-
 ---
 
-## FEATURE 015 — Custo a partir de compras *(1ª a implementar, quando sair do planejamento)*
+## FEATURES entregues (015–017)
 
-**Spec detalhada:** `docs/superpowers/specs/2026-08-06-feature-015-last-cost-from-purchases-design.md` (aprovada 2026-08-06).
+### FEATURE 015 — Custo a partir de compras
 
-**Por quê primeiro:** 012 já gera histórico confirmado; 016 (gerar compra) precisa de custo confiável para não reincitar preço errado.
+**Spec:** `docs/superpowers/specs/2026-08-06-feature-015-last-cost-from-purchases-design.md`  
+Ao confirmar compra: último `unit_cost` → `products.cost_price` + `product_suppliers` do fornecedor; cancel não recalcula.
 
-**Objetivo:** ao confirmar compra, gravar **último custo** em `products.cost_price` e em `product_suppliers.cost_price` do fornecedor da compra (se existir vínculo). Cancel não recalcula. Trigger SQL + backfill one-shot.
-
-**Dependências:** 009–012 estáveis.
-
----
-
-## FEATURE 016 — Pedido → compra *(2ª)*
+### FEATURE 016 — Pedido → compra
 
 **Spec:** `docs/superpowers/specs/2026-08-06-feature-016-pedido-to-purchase-design.md`  
-**Plan:** `docs/superpowers/plans/2026-08-06-feature-016-pedido-to-purchase.md`
+Pedido → draft `source=farol` → PurchaseSheet. Export BLING → **016.1**.
 
-**Objetivo:** a partir do Pedido Farol, gerar `purchases` draft `source=farol` (todas as linhas ou seleção), revisar no PurchaseSheet.
+### FEATURE 017 — BI operacional de compras
 
-**Dependências:** 015 (custo); 009 UI compras.
+**Spec:** `docs/superpowers/specs/2026-08-07-feature-017-purchase-ops-bi-design.md`  
+Aba Gestão: RPC `get_purchase_ops_kpis`; 14/30d; drafts; top 5; cancelados; taxa de fechamento.
 
----
-
-## FEATURE 017 — BI operacional *(3ª)*
-
-**Spec:** `docs/superpowers/specs/2026-08-07-feature-017-purchase-ops-bi-design.md` (aprovada 2026-08-07).
-
-**Objetivo:** painel leve de **compras** (aba Gestão): entradas 14/30d, drafts por origem, % confirmado/(confirmado+draft), top 5 fornecedores, cancelados. Sem BI externo. Farol/estoque → **017.1**.
-
-**Dependências:** volume de compras 011/012; 016 enriquece drafts `farol`.
+**PATCH 017.1 (refino UI/RPC mínimo):** valor total dos drafts (`drafts_open.total_amount`), label “Taxa de fechamento”, ticket médio, % participação top fornecedores, copy “30 dias (Acumulado)”. **Não** confundir com BI Farol.
 
 ---
 
-## FEATURE 013 / 014 — Hardening sync *(4ª, leve / sob demanda)*
+## Passos que faltam (definidos)
 
-Tratar **depois** de 015–017, ou só o pedaço que ainda doer:
+### 0. Integração git *(ops, não FEATURE)*
 
-| Tema | Exemplos |
-|------|----------|
-| 013 Sync | Checkpoint/cursor; fila justa além do teto de detalhe; docs ops |
-| 014 Cadastro/match | Dedup `nfe-doc:*` vs fornecedor BLING; ambiguidade GTIN; UX de drafts |
+| | |
+|--|--|
+| **O quê** | Merge `feature/017-purchase-ops-bi` → `main` + push `main` |
+| **Por quê** | Código oficial alinhado ao que já valida em produção |
+| **Done when** | `main` no remote inclui 017 + PATCH 017.1 |
 
-**Premissa do produto:** sujeira de sync tende a cair conforme o histórico sincroniza; não priorizar à frente do ciclo pedido→compra nem do BI.
+### 1. FEATURE 016.1 — Export compra → BLING
+
+| | |
+|--|--|
+| **O quê** | Enviar pedido/compra do Farol para o BLING |
+| **Por quê** | Fecha o ciclo no ERP (hoje para no rascunho Farol) |
+| **Fora** | Reescrever match; criar produto automático |
+| **Depende** | 016 estável |
+| **Done when** | Operador gera no Farol e vê o pedido no BLING sem digitação manual |
+
+### 2. FEATURE 013 — Hardening sync BLING (compras)
+
+| | |
+|--|--|
+| **O quê** | Sync previsível sob volume (checkpoint/cursor, fila justa além do teto de detalhe, docs ops) |
+| **Por quê** | Janela grande ainda depende de várias execuções + `nfe_max_detalhe` |
+| **Fora** | Mudar regra de match/estoque |
+| **Depende** | Dor mensurável (timeouts, atraso, buracos) |
+| **Done when** | Sync completa a janela sem timeout crônico, com progresso rastreável |
+
+### 3. FEATURE 014 — Cadastro / match
+
+| | |
+|--|--|
+| **O quê** | Menos drafts vazios e menos lixo de fornecedor (dedup `nfe-doc:*`, ambiguidade GTIN, UX de revisão) |
+| **Por quê** | Drafts “0 itens” e fornecedores auto-criados ainda poluem |
+| **Fora** | Criar produto automático na importação |
+| **Depende** | Volume real de drafts problemáticos |
+| **Done when** | Drafts abertos caem e/ou match sobe; revisão na UI é útil |
+
+### 4. FEATURE 018 — BI Farol / estoque
+
+| | |
+|--|--|
+| **O quê** | Painel de saúde Farol (ruptura, cobertura, valor em risco, etc.) |
+| **Por quê** | Análise hoje é lista operacional; falta visão gerencial de estoque |
+| **Fora** | BI externo; misturar KPIs de compra da Gestão |
+| **Depende** | 017 compras estável |
+| **Done when** | Spec + painel com métricas Farol acordadas |
+| **Numeração** | Antes chamado “017.1” no roadmap; **018** evita colisão com o PATCH de leitura da Gestão |
 
 ---
 
-## Ordem de execução (quando sair do modo planejamento)
+## Ordem sugerida
+
+**Default (sem dor aguda):**
 
 ```
-Fase 0 (ops 012)
-  → Spec + plan + impl FEATURE 015 (custo)
-  → Spec + plan + impl FEATURE 016 (pedido → compra)
-  → Spec + plan + impl FEATURE 017 (BI)
-  → 013/014 só se ainda houver dor mensurável
+0. Merge feature → main (+ push)
+  → 016.1 (export BLING)
+  → 014 (match / drafts)
+  → 013 (sync)
+  → 018 (BI Farol)
 ```
 
-Cada FEATURE: brainstorm/spec → plan → SDD/implementação → aceite. **Este arquivo não autoriza código.**
+**Por dor de negócio:**
 
-## Decisões em aberto (para specs futuras)
+| Gargalo | Ir para |
+|---------|---------|
+| Ainda digito no BLING | **016.1** |
+| Muitos drafts / match ruim | **014** |
+| Sync não acompanha | **013** |
+| Não vejo saúde do estoque | **018** |
 
-1. FEATURE 016.1: export pedido de compra ao BLING (fora do MVP 016).  
-2. FEATURE 017.1: BI Farol/estoque (fora do MVP 017 compras).
+Cada FEATURE: brainstorm/spec → plan → implementação → aceite.
 
-(015–017 compras: decisões fechadas nas specs dedicadas.)
+## Decisões em aberto (specs futuras)
+
+1. **016.1** — escopo exato do payload BLING (pedido vs NF; status após envio).  
+2. **018** — métricas exatas do painel Farol.  
+3. **013/014** — só abrir se dor mensurável; não priorizar “por limpeza”.
+
+(015–017 + PATCH 017.1: fechados nas specs / aceite.)
 
 ## Histórico de decisão
 
 | Data | Decisão |
 |------|---------|
-| 2026-08-06 | Prioridade negócio: (2) pedido→compra → (3) BI → (1) higiene sync |
-| 2026-08-06 | Numeração: 015 custo, 016 pedido→compra, 017 BI; 013/014 hardening no fim |
-| 2026-08-06 | Somente planejamento; sem implementação nesta etapa |
-| 2026-08-06 | Spec 015 aprovada (último custo → products + PS; cancel não recalcula) |
-| 2026-08-06 | Manter ordem 015 → 016 → 017; **não** entregar BI meia-boca; pressão de BI tratada com comunicação + ordem definida |
-| 2026-08-06 | FEATURE 015: migration no repo; aguardando apply live + aceite |
-| 2026-08-07 | Spec 017 aprovada (Gestão / KPIs compras; Farol → 017.1) |
+| 2026-08-06 | Prioridade negócio: pedido→compra → BI compras → higiene sync |
+| 2026-08-06 | Numeração: 015 custo, 016 pedido→compra, 017 BI compras; 013/014 no fim |
+| 2026-08-06 | Spec 015 aprovada |
+| 2026-08-07 | Spec 017 aprovada; ciclo 015–016–017 implementado e aceito |
+| 2026-08-07 | PATCH 017.1 = refino leitura Gestão (não é BI Farol) |
+| 2026-08-07 | BI Farol/estoque renumerado para **FEATURE 018**; próximos passos 0 / 016.1 / 013 / 014 / 018 definidos |

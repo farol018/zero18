@@ -7,7 +7,7 @@
 
 ## Objetivo
 
-Painel gerencial **leve** no app (sem ferramenta de BI externa) respondendo: quanto entrou em compras, o que ainda está em rascunho, qualidade de fechamento no período e top fornecedores. Escopo MVP = **compras**. Visão Farol/estoque fica para **017.1**.
+Painel gerencial **leve** no app (sem ferramenta de BI externa) respondendo: quanto entrou em compras, o que ainda está em rascunho, qualidade de fechamento no período e top fornecedores. Escopo MVP = **compras**. Visão Farol/estoque fica para **FEATURE 018**.
 
 ## Decisões de produto
 
@@ -19,7 +19,7 @@ Painel gerencial **leve** no app (sem ferramenta de BI externa) respondendo: qua
 | Métricas | Pacote B (abaixo) |
 | Fonte | RPC SQL `get_purchase_ops_kpis` + UI fina |
 | Marketplace rejeitado | **Fora** (hoje só no Resultado n8n) |
-| BI Farol | **017.1** |
+| BI Farol | **018** (não confundir com PATCH 017.1 de leitura da Gestão) |
 
 ## Métricas MVP
 
@@ -52,7 +52,7 @@ Cancelados **não** entram no denominador do %. São exibidos à parte.
 
 ## Fora de escopo
 
-- BI Farol (ruptura, cobertura, valor em risco) → **017.1**
+- BI Farol (ruptura, cobertura, valor em risco) → **018**
 - Rejeições marketplace / telemetria n8n no banco
 - Gráficos, seletor de período, date picker
 - Drill-down obrigatório / navegação para Compras (pode vir depois)
@@ -136,14 +136,16 @@ Visual: reutilizar tokens/cards do Farol; sem dashboard genérico com gráfico d
 - [ ] Top 5 bate com confirmados dos últimos 30 dias
 - [ ] Loading / vazio / erro ok
 
-## FEATURE 017.1 (só nomeada)
+## FEATURE 018 (só nomeada; ex-“017.1” no roadmap)
 
 Painel / cards de saúde Farol (ruptura, cobertura, etc.) — **fora** desta entrega; spec própria quando priorizar.
+
+**PATCH 017.1** = refino de leitura da aba Gestão (drafts R$, taxa, ticket, % top) — já entregue; não é BI Farol.
 
 ## Histórico
 
 | Data | Decisão |
 |------|---------|
-| 2026-08-07 | MVP = BI compras; Farol → 017.1 |
+| 2026-08-07 | MVP = BI compras; Farol → 018 (renumerado; evita colisão com PATCH 017.1) |
 | 2026-08-07 | Aba Gestão; período fixo 14/30; métricas pacote B; % = confirmed/(confirmed+draft) |
 | 2026-08-07 | RPC SQL + UI fina; sem marketplace no banco |

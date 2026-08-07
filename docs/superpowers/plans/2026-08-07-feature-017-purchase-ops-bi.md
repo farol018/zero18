@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **Escopo = SPEC, ponto final.** Não adicionar KPIs, gráficos, filtros, seletor de período, drill-down, navegação para Compras, export, telemetria marketplace, nem BI Farol. Qualquer evolução → **FEATURE 017.1**.
+- **Escopo = SPEC, ponto final.** Não adicionar KPIs, gráficos, filtros, seletor de período, drill-down, navegação para Compras, export, telemetria marketplace, nem BI Farol. Evolução de leitura da Gestão → PATCH 017.1; BI Farol → **FEATURE 018**.
 - Período **fixo** 14d e 30d (`issued_at` em `[CURRENT_DATE - (N-1), CURRENT_DATE]`).
 - `%` = `confirmed / (confirmed + draft)` na janela; cancelados **fora** do denominador; denom 0 → `null`.
 - Drafts abertos = snapshot **agora**; `other` = tudo que não é `bling` nem `farol`.
