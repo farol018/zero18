@@ -8,6 +8,7 @@ export type PurchaseOpsWindowKpis = {
 
 export type PurchaseOpsDraftsOpen = {
   total: number;
+  total_amount: number;
   bling: number;
   farol: number;
   other: number;
@@ -60,6 +61,7 @@ export function parsePurchaseOpsKpis(raw: unknown): PurchaseOpsKpis {
     windows: { d14: parseWindow(windows.d14), d30: parseWindow(windows.d30) },
     drafts_open: {
       total: num(drafts.total),
+      total_amount: num(drafts.total_amount),
       bling: num(drafts.bling),
       farol: num(drafts.farol),
       other: num(drafts.other),
@@ -77,6 +79,25 @@ export function parsePurchaseOpsKpis(raw: unknown): PurchaseOpsKpis {
 }
 
 export function formatConfirmedVsDraftPct(pct: number | null): string {
+  if (pct === null || !Number.isFinite(pct)) return "—";
+  return `${Math.round(pct)}%`;
+}
+
+/** Ticket médio = confirmed_amount / confirmed_count; null se count ≤ 0. */
+export function averageTicket(amount: number, count: number): number | null {
+  if (count <= 0) return null;
+  const n = amount / count;
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Participação = amount / totalConfirmed30d × 100; null se total ≤ 0. */
+export function supplierSharePct(amount: number, totalConfirmed30d: number): number | null {
+  if (totalConfirmed30d <= 0) return null;
+  const n = (amount / totalConfirmed30d) * 100;
+  return Number.isFinite(n) ? n : null;
+}
+
+export function formatSharePct(pct: number | null): string {
   if (pct === null || !Number.isFinite(pct)) return "—";
   return `${Math.round(pct)}%`;
 }

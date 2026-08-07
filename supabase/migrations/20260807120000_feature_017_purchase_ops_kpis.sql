@@ -90,6 +90,7 @@ BEGIN
 
   SELECT jsonb_build_object(
     'total', count(*)::int,
+    'total_amount', coalesce(sum(coalesce(total_amount, 0)), 0)::numeric,
     'bling', count(*) FILTER (WHERE source = 'bling')::int,
     'farol', count(*) FILTER (WHERE source = 'farol')::int,
     'other', count(*) FILTER (WHERE source IS DISTINCT FROM 'bling' AND source IS DISTINCT FROM 'farol')::int
