@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## FAROL — Sync Compras (FEATURE 012)\n\n- `dias_janela = 5` (NF-e entrada; janela curta evita truncar em marketplace)\n- `nfe_tipo = 0` (entrada)\n- `modo_teste = 0`\n- Intervalo BLING **3s**\n- Max **250** detalhes / **100** páginas lista\n\nMatch e estoque ficam no RPC `import_purchase_nfe`.",
+        "content": "## FAROL — Sync Compras (FEATURE 012)\n\n- `dias_janela = 3` (NF-e entrada; janela curta evita truncar em marketplace)\n- `nfe_tipo = 0` (entrada)\n- `modo_teste = 0`\n- Intervalo BLING **3s**\n- Max **250** detalhes / **100** páginas lista\n\nMatch e estoque ficam no RPC `import_purchase_nfe`.",
         "height": 240,
         "width": 460
       },
@@ -72,7 +72,7 @@
             {
               "id": "a4",
               "name": "dias_janela",
-              "value": 5,
+              "value": 3,
               "type": "number"
             },
             {
