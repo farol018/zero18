@@ -95,7 +95,7 @@ O workflow `farol-bling-sync-compras.json` importa **NF-e de entrada** (compras)
 |--------------|-------|-----|
 | `nfe_tipo` | `0` | 0 = entrada (compra) |
 | `nfe_series` | *(vazio)* | Aceita qualquer série do fornecedor |
-| `dias_janela` | `3` | Janela rolante de emissão. Com ~95% marketplace, mesmo 5 dias ainda truncava em 10 mil notas |
+| `dias_janela` | `1` | Janela rolante. Volume de entrada ~3k+/dia (~95% marketplace); 3+ dias truncava em 10 mil. Cron frequente cobre o dia |
 | `compras_max_paginas` | `100` | Páginas de `GET /nfe` (100 notas cada). Marketplace é ~95% do volume, então listagem curta trunca antes de alcançar as compras |
 | `nfe_max_detalhe` | `250` | Máx. detalhes `GET /nfe/{id}` por execução (evita timeout ~1h40) |
 | `bling_interval_ms` | `3000` | Intervalo entre calls BLING (ms) |
@@ -105,7 +105,7 @@ O workflow `farol-bling-sync-compras.json` importa **NF-e de entrada** (compras)
 Fluxo:
 
 1. Nó **BLING - Naturezas** (`GET /naturezas-operacoes?limite=100`) carrega as naturezas da conta e marca como devolução as que têm `devolu`/`retorno` na descrição.
-2. Lista BLING `GET /nfe?tipo=0` com paginação (até 100 páginas) e janela de 3 dias. Se `nfes_lista_total` bater cravado em `compras_max_paginas × 100`, a listagem truncou — encurte `dias_janela` ou suba o teto de páginas.
+2. Lista BLING `GET /nfe?tipo=0` com paginação (até 100 páginas) e janela de 1 dia. Se `nfes_lista_total` bater cravado em `compras_max_paginas × 100`, a listagem truncou — encurte `dias_janela` ou suba o teto de páginas.
 3. **Antes do detalhe:** pula EBAZAR/ML na lista por chave NFe (CNPJ raiz `03007331`), CNPJ do `contato`, ou nome (`ebazar` / `mercado livre`) — assim o teto `nfe_max_detalhe` não é gasto só em marketplace.
 4. **Antes do detalhe:** pula devoluções pelo `naturezaOperacao.id` da listagem (IDs do passo 1 + `nfe_naturezas_devolucao`). Nota sem natureza na listagem segue para o detalhe (o filtro por CFOP/natureza continua valendo lá).
 5. Detalha notas sem itens na listagem (`GET /nfe/{id}`), intervalo BLING ~3s.
